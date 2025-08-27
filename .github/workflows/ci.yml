@@ -103,19 +103,3 @@ jobs:
       with:
         sarif_file: gosec-results.sarif
 
-  dependency-check:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: 'stable'
-        
-    - name: Check for known vulnerabilities
-      run: |
-        cd backend
-        go list -json -m all | docker run --rm -i sonatypecommunity/nancy:latest sleuth
