@@ -18,7 +18,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.25'
+        go-version: '1.21'
         
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -26,7 +26,7 @@ jobs:
         path: |
           ~/go/pkg/mod
           ~/.cache/go-build
-        key: ${{ runner.os }}-go-quality-${{ hashFiles('**/go.sum') }}
+        key: ${{ runner.os }}-go-quality-${{ hashFiles('backend/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-go-quality-
           ${{ runner.os }}-go-
@@ -70,19 +70,18 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.25'
+        go-version: '1.21'
         
     - name: Install SQLite
       run: sudo apt-get update && sudo apt-get install -y sqlite3
       
     - name: Test database initialization
       run: |
-        cd backend
-        mkdir -p data
+        mkdir -p backend/data
         make init-db
-        if [ -f data/recipes.db ]; then
+        if [ -f backend/data/recipes.db ]; then
           echo "Database created successfully"
-          sqlite3 data/recipes.db ".tables"
+          sqlite3 backend/data/recipes.db ".tables"
         else
           echo "Database not created"
           exit 1
@@ -104,7 +103,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.25'
+        go-version: '1.21'
         
     - name: Install dependencies
       run: |
