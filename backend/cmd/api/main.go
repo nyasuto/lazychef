@@ -36,7 +36,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("Error closing database: %v", err)
+		}
+	}()
 
 	// Load OpenAI configuration
 	openaiConfig, err := config.LoadOpenAIConfig()
@@ -152,5 +156,7 @@ func main() {
 		log.Printf("Recipe test: http://localhost:%s/api/recipes/test", port)
 	}
 
-	r.Run(":" + port)
+	if err := r.Run(":" + port); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }

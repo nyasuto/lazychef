@@ -1,0 +1,140 @@
+name: Quality Checks
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-quality-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-quality-
+          ${{ runner.os }}-go-
+          
+    - name: Install golangci-lint
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
+        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+        
+    - name: Install dependencies
+      run: |
+        cd backend
+        go mod download
+        
+    - name: Run make quality
+      run: make quality
+      
+    - name: Run golangci-lint
+      run: |
+        cd backend
+        golangci-lint run ./...
+        
+    - name: Check mod tidy
+      run: |
+        cd backend
+        go mod tidy
+        if ! git diff --quiet go.mod go.sum; then
+          echo "go mod tidy made changes, please run 'go mod tidy' and commit the changes"
+          git diff go.mod go.sum
+          exit 1
+        fi
+
+  database:
+    name: Database Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        
+    - name: Install SQLite
+      run: sudo apt-get update && sudo apt-get install -y sqlite3
+      
+    - name: Test database initialization
+      run: |
+        cd backend
+        mkdir -p data
+        make init-db
+        if [ -f data/recipes.db ]; then
+          echo "Database created successfully"
+          sqlite3 data/recipes.db ".tables"
+        else
+          echo "Database not created"
+          exit 1
+        fi
+        
+    - name: Run database-related tests
+      run: |
+        cd backend
+        go test -v ./internal/database/... ./internal/services/...
+
+  api:
+    name: API Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        
+    - name: Install dependencies
+      run: |
+        cd backend
+        go mod download
+        
+    - name: Start API server
+      run: |
+        cd backend
+        go build -o ../bin/test-server cmd/api/main.go
+        ../bin/test-server &
+        echo $! > server.pid
+        sleep 5
+        
+    - name: Test API endpoints
+      run: |
+        # Test health endpoint
+        curl -f http://localhost:8080/api/health || exit 1
+        
+        # Test recipe search
+        curl -f "http://localhost:8080/api/recipes/search?tag=簡単" || exit 1
+        
+        # Test meal plan creation (expect error due to missing OpenAI key)
+        curl -X POST http://localhost:8080/api/meal-plans/create \
+          -H "Content-Type: application/json" \
+          -d '{"start_date": "2025-01-27", "preferences": {"max_cooking_time": 15}}' \
+          -w "%{http_code}\n" | grep -q "503" || exit 1
+          
+    - name: Stop API server
+      run: |
+        if [ -f backend/server.pid ]; then
+          kill $(cat backend/server.pid) || true
+        fi
