@@ -13,6 +13,9 @@ bin/
 *.db
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
+*.db-journal
 
 # Environment variables
 .env
@@ -58,3 +61,4 @@ temp/
 *credential*
 
 .mcp.json
+.serena

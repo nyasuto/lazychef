@@ -25,23 +25,23 @@ func New(config Config) (*Database, error) {
 	if err := os.MkdirAll(filepath.Dir(config.Path), 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
-	
+
 	// Open database connection
 	db, err := sql.Open("sqlite3", config.Path+"?_foreign_keys=on&_journal_mode=WAL")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
-	
+
 	// Test connection
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
-	
+
 	// Configure connection pool
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(5)
-	
+
 	return &Database{DB: db}, nil
 }
 
@@ -58,7 +58,7 @@ func (db *Database) Health() error {
 // GetStats returns database statistics
 func (db *Database) GetStats() (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
-	
+
 	// Recipe count
 	var recipeCount int
 	err := db.QueryRow("SELECT COUNT(*) FROM recipes").Scan(&recipeCount)
@@ -66,7 +66,7 @@ func (db *Database) GetStats() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("failed to get recipe count: %w", err)
 	}
 	stats["recipe_count"] = recipeCount
-	
+
 	// Meal plan count
 	var mealPlanCount int
 	err = db.QueryRow("SELECT COUNT(*) FROM meal_plans").Scan(&mealPlanCount)
@@ -74,7 +74,7 @@ func (db *Database) GetStats() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("failed to get meal plan count: %w", err)
 	}
 	stats["meal_plan_count"] = mealPlanCount
-	
+
 	// User preferences count
 	var userPrefCount int
 	err = db.QueryRow("SELECT COUNT(*) FROM user_preferences").Scan(&userPrefCount)
@@ -82,7 +82,7 @@ func (db *Database) GetStats() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("failed to get user preferences count: %w", err)
 	}
 	stats["user_preferences_count"] = userPrefCount
-	
+
 	// Database size (approximate)
 	var pageCount, pageSize int
 	err = db.QueryRow("PRAGMA page_count").Scan(&pageCount)
@@ -92,7 +92,7 @@ func (db *Database) GetStats() (map[string]interface{}, error) {
 			stats["database_size_bytes"] = pageCount * pageSize
 		}
 	}
-	
+
 	return stats, nil
 }
 
@@ -108,25 +108,25 @@ func (db *Database) ExecuteInTx(fn func(*sql.Tx) error) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	
+
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
 			panic(r)
 		}
 	}()
-	
+
 	if err := fn(tx); err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
 			return fmt.Errorf("failed to rollback transaction: %v (original error: %w)", rbErr, err)
 		}
 		return err
 	}
-	
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -144,14 +144,14 @@ func (db *Database) Backup(backupPath string) error {
 		return fmt.Errorf("failed to create backup database: %w", err)
 	}
 	defer backupDB.Close()
-	
+
 	// Use SQLite's backup API through ATTACH
 	_, err = db.Exec(fmt.Sprintf("ATTACH DATABASE '%s' AS backup", backupPath))
 	if err != nil {
 		return fmt.Errorf("failed to attach backup database: %w", err)
 	}
 	defer db.Exec("DETACH DATABASE backup")
-	
+
 	// Copy tables
 	tables := []string{"recipes", "meal_plans", "user_preferences"}
 	for _, table := range tables {
@@ -160,7 +160,7 @@ func (db *Database) Backup(backupPath string) error {
 			return fmt.Errorf("failed to backup table %s: %w", table, err)
 		}
 	}
-	
+
 	return nil
 }
 

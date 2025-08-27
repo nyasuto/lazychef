@@ -17,29 +17,29 @@ import (
 
 // RecipeGeneratorService handles AI-powered recipe generation
 type RecipeGeneratorService struct {
-	client       *openai.Client
-	config       *config.OpenAIConfig
-	rateLimiter  *RateLimiter
-	cache        *RecipeCache
+	client      *openai.Client
+	config      *config.OpenAIConfig
+	rateLimiter *RateLimiter
+	cache       *RecipeCache
 }
 
 // GenerationResult holds the result of recipe generation
 type GenerationResult struct {
-	Recipe    *models.RecipeData `json:"recipe,omitempty"`
-	Recipes   []models.RecipeData `json:"recipes,omitempty"`
-	Error     string             `json:"error,omitempty"`
-	Metadata  GenerationMetadata `json:"metadata"`
+	Recipe   *models.RecipeData  `json:"recipe,omitempty"`
+	Recipes  []models.RecipeData `json:"recipes,omitempty"`
+	Error    string              `json:"error,omitempty"`
+	Metadata GenerationMetadata  `json:"metadata"`
 }
 
 // GenerationMetadata holds metadata about the generation process
 type GenerationMetadata struct {
-	RequestID     string        `json:"request_id"`
-	Model         string        `json:"model"`
-	TokensUsed    int           `json:"tokens_used"`
-	GeneratedAt   time.Time     `json:"generated_at"`
+	RequestID      string        `json:"request_id"`
+	Model          string        `json:"model"`
+	TokensUsed     int           `json:"tokens_used"`
+	GeneratedAt    time.Time     `json:"generated_at"`
 	ProcessingTime time.Duration `json:"processing_time"`
-	CacheHit      bool          `json:"cache_hit"`
-	RetryCount    int           `json:"retry_count"`
+	CacheHit       bool          `json:"cache_hit"`
+	RetryCount     int           `json:"retry_count"`
 }
 
 // BatchGenerationRequest represents a request for multiple recipes
@@ -53,11 +53,11 @@ func NewRecipeGeneratorService(config *config.OpenAIConfig) (*RecipeGeneratorSer
 	if config == nil {
 		return nil, errors.New("config cannot be nil")
 	}
-	
+
 	client := openai.NewClient(config.APIKey)
 	rateLimiter := NewRateLimiter(config.RequestsPerMinute)
 	cache := NewRecipeCache(1000, 24*time.Hour) // Cache for 24 hours
-	
+
 	return &RecipeGeneratorService{
 		client:      client,
 		config:      config,
@@ -70,7 +70,7 @@ func NewRecipeGeneratorService(config *config.OpenAIConfig) (*RecipeGeneratorSer
 func (s *RecipeGeneratorService) GenerateRecipe(ctx context.Context, req RecipeGenerationRequest) (*GenerationResult, error) {
 	startTime := time.Now()
 	requestID := generateRequestID()
-	
+
 	// Check cache first
 	cacheKey := s.generateCacheKey(req)
 	if cachedResult := s.cache.Get(cacheKey); cachedResult != nil {
@@ -79,74 +79,15 @@ func (s *RecipeGeneratorService) GenerateRecipe(ctx context.Context, req RecipeG
 		cachedResult.Metadata.ProcessingTime = time.Since(startTime)
 		return cachedResult, nil
 	}
-	
+
 	// Rate limiting
 	if err := s.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("rate limiting error: %w", err)
 	}
-	
+
 	// Generate prompt
 	promptTemplate := GetRecipeGenerationPrompt(req)
-	
-	result := &GenerationResult{
-		Metadata: GenerationMetadata{
-			RequestID:     requestID,
-			Model:         s.config.Model,
-			GeneratedAt:   time.Now(),
-			CacheHit:      false,
-		},
-	}
-	
-	// Call OpenAI API with retries
-	recipe, tokensUsed, retryCount, err := s.callOpenAIWithRetry(ctx, promptTemplate)
-	if err != nil {
-		result.Error = err.Error()
-		result.Metadata.ProcessingTime = time.Since(startTime)
-		result.Metadata.RetryCount = retryCount
-		return result, err
-	}
-	
-	result.Recipe = recipe
-	result.Metadata.TokensUsed = tokensUsed
-	result.Metadata.ProcessingTime = time.Since(startTime)
-	result.Metadata.RetryCount = retryCount
-	
-	// Validate and enhance the generated recipe
-	if err := s.validateAndEnhanceRecipe(result.Recipe); err != nil {
-		return result, fmt.Errorf("recipe validation failed: %w", err)
-	}
-	
-	// Cache the result
-	s.cache.Set(cacheKey, result)
-	
-	log.Printf("Generated recipe '%s' in %v (tokens: %d, retries: %d)",
-		result.Recipe.Title, result.Metadata.ProcessingTime, tokensUsed, retryCount)
-	
-	return result, nil
-}
 
-// GenerateBatchRecipes generates multiple recipes based on the request
-func (s *RecipeGeneratorService) GenerateBatchRecipes(ctx context.Context, req BatchGenerationRequest) (*GenerationResult, error) {
-	startTime := time.Now()
-	requestID := generateRequestID()
-	
-	// Check cache
-	cacheKey := s.generateBatchCacheKey(req)
-	if cachedResult := s.cache.Get(cacheKey); cachedResult != nil {
-		cachedResult.Metadata.CacheHit = true
-		cachedResult.Metadata.RequestID = requestID
-		cachedResult.Metadata.ProcessingTime = time.Since(startTime)
-		return cachedResult, nil
-	}
-	
-	// Rate limiting
-	if err := s.rateLimiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("rate limiting error: %w", err)
-	}
-	
-	// Generate prompt for batch generation
-	promptTemplate := GetBatchRecipeGenerationPrompt(req.RecipeGenerationRequest, req.Count)
-	
 	result := &GenerationResult{
 		Metadata: GenerationMetadata{
 			RequestID:   requestID,
@@ -155,7 +96,66 @@ func (s *RecipeGeneratorService) GenerateBatchRecipes(ctx context.Context, req B
 			CacheHit:    false,
 		},
 	}
-	
+
+	// Call OpenAI API with retries
+	recipe, tokensUsed, retryCount, err := s.callOpenAIWithRetry(ctx, promptTemplate)
+	if err != nil {
+		result.Error = err.Error()
+		result.Metadata.ProcessingTime = time.Since(startTime)
+		result.Metadata.RetryCount = retryCount
+		return result, err
+	}
+
+	result.Recipe = recipe
+	result.Metadata.TokensUsed = tokensUsed
+	result.Metadata.ProcessingTime = time.Since(startTime)
+	result.Metadata.RetryCount = retryCount
+
+	// Validate and enhance the generated recipe
+	if err := s.validateAndEnhanceRecipe(result.Recipe); err != nil {
+		return result, fmt.Errorf("recipe validation failed: %w", err)
+	}
+
+	// Cache the result
+	s.cache.Set(cacheKey, result)
+
+	log.Printf("Generated recipe '%s' in %v (tokens: %d, retries: %d)",
+		result.Recipe.Title, result.Metadata.ProcessingTime, tokensUsed, retryCount)
+
+	return result, nil
+}
+
+// GenerateBatchRecipes generates multiple recipes based on the request
+func (s *RecipeGeneratorService) GenerateBatchRecipes(ctx context.Context, req BatchGenerationRequest) (*GenerationResult, error) {
+	startTime := time.Now()
+	requestID := generateRequestID()
+
+	// Check cache
+	cacheKey := s.generateBatchCacheKey(req)
+	if cachedResult := s.cache.Get(cacheKey); cachedResult != nil {
+		cachedResult.Metadata.CacheHit = true
+		cachedResult.Metadata.RequestID = requestID
+		cachedResult.Metadata.ProcessingTime = time.Since(startTime)
+		return cachedResult, nil
+	}
+
+	// Rate limiting
+	if err := s.rateLimiter.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("rate limiting error: %w", err)
+	}
+
+	// Generate prompt for batch generation
+	promptTemplate := GetBatchRecipeGenerationPrompt(req.RecipeGenerationRequest, req.Count)
+
+	result := &GenerationResult{
+		Metadata: GenerationMetadata{
+			RequestID:   requestID,
+			Model:       s.config.Model,
+			GeneratedAt: time.Now(),
+			CacheHit:    false,
+		},
+	}
+
 	// Call OpenAI API
 	recipes, tokensUsed, retryCount, err := s.callOpenAIBatchWithRetry(ctx, promptTemplate)
 	if err != nil {
@@ -164,32 +164,32 @@ func (s *RecipeGeneratorService) GenerateBatchRecipes(ctx context.Context, req B
 		result.Metadata.RetryCount = retryCount
 		return result, err
 	}
-	
+
 	result.Recipes = recipes
 	result.Metadata.TokensUsed = tokensUsed
 	result.Metadata.ProcessingTime = time.Since(startTime)
 	result.Metadata.RetryCount = retryCount
-	
+
 	// Validate each recipe
 	for i := range result.Recipes {
 		if err := s.validateAndEnhanceRecipe(&result.Recipes[i]); err != nil {
 			log.Printf("Warning: Recipe %d validation failed: %v", i, err)
 		}
 	}
-	
+
 	// Cache the result
 	s.cache.Set(cacheKey, result)
-	
+
 	log.Printf("Generated %d recipes in %v (tokens: %d, retries: %d)",
 		len(recipes), result.Metadata.ProcessingTime, tokensUsed, retryCount)
-	
+
 	return result, nil
 }
 
 // callOpenAIWithRetry calls OpenAI API with retry logic for single recipe
 func (s *RecipeGeneratorService) callOpenAIWithRetry(ctx context.Context, prompt PromptTemplate) (*models.RecipeData, int, int, error) {
 	var lastErr error
-	
+
 	for attempt := 0; attempt <= s.config.MaxRetries; attempt++ {
 		if attempt > 0 {
 			select {
@@ -198,28 +198,28 @@ func (s *RecipeGeneratorService) callOpenAIWithRetry(ctx context.Context, prompt
 				return nil, 0, attempt, ctx.Err()
 			}
 		}
-		
+
 		recipe, tokensUsed, err := s.callOpenAIForRecipe(ctx, prompt)
 		if err == nil {
 			return recipe, tokensUsed, attempt, nil
 		}
-		
+
 		lastErr = err
 		log.Printf("Recipe generation attempt %d failed: %v", attempt+1, err)
-		
+
 		// Don't retry on certain errors
 		if isNonRetryableError(err) {
 			break
 		}
 	}
-	
+
 	return nil, 0, s.config.MaxRetries, fmt.Errorf("failed after %d attempts: %w", s.config.MaxRetries+1, lastErr)
 }
 
 // callOpenAIBatchWithRetry calls OpenAI API with retry logic for batch recipes
 func (s *RecipeGeneratorService) callOpenAIBatchWithRetry(ctx context.Context, prompt PromptTemplate) ([]models.RecipeData, int, int, error) {
 	var lastErr error
-	
+
 	for attempt := 0; attempt <= s.config.MaxRetries; attempt++ {
 		if attempt > 0 {
 			select {
@@ -228,20 +228,20 @@ func (s *RecipeGeneratorService) callOpenAIBatchWithRetry(ctx context.Context, p
 				return nil, 0, attempt, ctx.Err()
 			}
 		}
-		
+
 		recipes, tokensUsed, err := s.callOpenAIForBatchRecipes(ctx, prompt)
 		if err == nil {
 			return recipes, tokensUsed, attempt, nil
 		}
-		
+
 		lastErr = err
 		log.Printf("Batch recipe generation attempt %d failed: %v", attempt+1, err)
-		
+
 		if isNonRetryableError(err) {
 			break
 		}
 	}
-	
+
 	return nil, 0, s.config.MaxRetries, fmt.Errorf("failed after %d attempts: %w", s.config.MaxRetries+1, lastErr)
 }
 
@@ -262,29 +262,29 @@ func (s *RecipeGeneratorService) callOpenAIForRecipe(ctx context.Context, prompt
 			},
 		},
 	}
-	
+
 	// Create context with timeout
 	timeoutCtx, cancel := context.WithTimeout(ctx, s.config.RequestTimeout)
 	defer cancel()
-	
+
 	resp, err := s.client.CreateChatCompletion(timeoutCtx, req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("OpenAI API call failed: %w", err)
 	}
-	
+
 	if len(resp.Choices) == 0 {
 		return nil, resp.Usage.TotalTokens, errors.New("no choices returned from OpenAI")
 	}
-	
+
 	content := resp.Choices[0].Message.Content
 	content = strings.TrimSpace(content)
-	
+
 	// Parse JSON response
 	var recipe models.RecipeData
 	if err := json.Unmarshal([]byte(content), &recipe); err != nil {
 		return nil, resp.Usage.TotalTokens, fmt.Errorf("failed to parse recipe JSON: %w", err)
 	}
-	
+
 	return &recipe, resp.Usage.TotalTokens, nil
 }
 
@@ -305,31 +305,31 @@ func (s *RecipeGeneratorService) callOpenAIForBatchRecipes(ctx context.Context, 
 			},
 		},
 	}
-	
+
 	timeoutCtx, cancel := context.WithTimeout(ctx, s.config.RequestTimeout)
 	defer cancel()
-	
+
 	resp, err := s.client.CreateChatCompletion(timeoutCtx, req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("OpenAI API call failed: %w", err)
 	}
-	
+
 	if len(resp.Choices) == 0 {
 		return nil, resp.Usage.TotalTokens, errors.New("no choices returned from OpenAI")
 	}
-	
+
 	content := resp.Choices[0].Message.Content
 	content = strings.TrimSpace(content)
-	
+
 	// Parse JSON response
 	var batchResponse struct {
 		Recipes []models.RecipeData `json:"recipes"`
 	}
-	
+
 	if err := json.Unmarshal([]byte(content), &batchResponse); err != nil {
 		return nil, resp.Usage.TotalTokens, fmt.Errorf("failed to parse batch recipe JSON: %w", err)
 	}
-	
+
 	return batchResponse.Recipes, resp.Usage.TotalTokens, nil
 }
 
@@ -338,12 +338,12 @@ func (s *RecipeGeneratorService) validateAndEnhanceRecipe(recipe *models.RecipeD
 	if recipe == nil {
 		return errors.New("recipe is nil")
 	}
-	
+
 	// Validate required fields
 	if err := recipe.Validate(); err != nil {
 		return err
 	}
-	
+
 	// Enhance recipe with calculated laziness score if not present or seems wrong
 	calculatedScore := recipe.CalculateLazinessScore()
 	if recipe.LazinessScore < 1.0 || recipe.LazinessScore > 10.0 {
@@ -352,12 +352,12 @@ func (s *RecipeGeneratorService) validateAndEnhanceRecipe(recipe *models.RecipeD
 		// Use average of AI score and calculated score for better accuracy
 		recipe.LazinessScore = (recipe.LazinessScore + calculatedScore) / 2.0
 	}
-	
+
 	// Set default serving size if not specified
 	if recipe.ServingSize <= 0 {
 		recipe.ServingSize = 1
 	}
-	
+
 	// Set default difficulty if not specified
 	if recipe.Difficulty == "" {
 		if recipe.LazinessScore >= 8.0 {
@@ -368,7 +368,7 @@ func (s *RecipeGeneratorService) validateAndEnhanceRecipe(recipe *models.RecipeD
 			recipe.Difficulty = "hard"
 		}
 	}
-	
+
 	return nil
 }
 
@@ -401,19 +401,19 @@ func isNonRetryableError(err error) bool {
 	// Check for specific error types that shouldn't be retried
 	errStr := err.Error()
 	return strings.Contains(errStr, "invalid_api_key") ||
-		   strings.Contains(errStr, "insufficient_quota") ||
-		   strings.Contains(errStr, "invalid_request_error")
+		strings.Contains(errStr, "insufficient_quota") ||
+		strings.Contains(errStr, "invalid_request_error")
 }
 
 // GetHealth returns the health status of the service
 func (s *RecipeGeneratorService) GetHealth() map[string]interface{} {
 	return map[string]interface{}{
-		"status":            "healthy",
-		"model":             s.config.Model,
-		"cache_size":        s.cache.Size(),
-		"rate_limit_rpm":    s.config.RequestsPerMinute,
-		"max_retries":       s.config.MaxRetries,
-		"request_timeout":   s.config.RequestTimeout.String(),
+		"status":          "healthy",
+		"model":           s.config.Model,
+		"cache_size":      s.cache.Size(),
+		"rate_limit_rpm":  s.config.RequestsPerMinute,
+		"max_retries":     s.config.MaxRetries,
+		"request_timeout": s.config.RequestTimeout.String(),
 	}
 }
 

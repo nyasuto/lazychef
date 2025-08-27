@@ -7,10 +7,10 @@ import (
 
 // UserPreferences represents user settings and preferences
 type UserPreferences struct {
-	ID          int                   `json:"id" db:"id"`
-	UserID      string                `json:"user_id" db:"user_id"`
-	Preferences UserPreferencesData   `json:"preferences" db:"preferences"`
-	UpdatedAt   time.Time             `json:"updated_at" db:"updated_at"`
+	ID          int                 `json:"id" db:"id"`
+	UserID      string              `json:"user_id" db:"user_id"`
+	Preferences UserPreferencesData `json:"preferences" db:"preferences"`
+	UpdatedAt   time.Time           `json:"updated_at" db:"updated_at"`
 }
 
 // UserPreferencesData holds the JSON-stored preferences
@@ -43,7 +43,7 @@ func (u *UserPreferencesData) Validate() error {
 	if u.MealPlanLength <= 0 {
 		u.MealPlanLength = 7 // Default to 1 week
 	}
-	
+
 	// Validate preferred seasons
 	validSeasons := map[string]bool{
 		"spring": true,
@@ -52,7 +52,7 @@ func (u *UserPreferencesData) Validate() error {
 		"winter": true,
 		"all":    true,
 	}
-	
+
 	validPreferredSeasons := []string{}
 	for _, season := range u.PreferredSeasons {
 		if validSeasons[season] {
@@ -60,11 +60,11 @@ func (u *UserPreferencesData) Validate() error {
 		}
 	}
 	u.PreferredSeasons = validPreferredSeasons
-	
+
 	if len(u.PreferredSeasons) == 0 {
 		u.PreferredSeasons = []string{"all"}
 	}
-	
+
 	return nil
 }
 
@@ -75,14 +75,14 @@ func (u *UserPreferencesData) IsIngredientExcluded(ingredient string) bool {
 			return true
 		}
 	}
-	
+
 	// Check against allergy info as well
 	for _, allergy := range u.AllergyInfo {
 		if contains(ingredient, allergy) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
