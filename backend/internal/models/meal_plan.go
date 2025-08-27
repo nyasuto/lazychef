@@ -7,9 +7,9 @@ import (
 
 // ShoppingItem represents an item in the shopping list
 type ShoppingItem struct {
-	Item   string `json:"item" binding:"required"`
-	Amount string `json:"amount" binding:"required"`
-	Cost   int    `json:"cost,omitempty"` // Cost in yen
+	Item     string `json:"item" binding:"required"`
+	Amount   string `json:"amount" binding:"required"`
+	Cost     int    `json:"cost,omitempty"`     // Cost in yen
 	Category string `json:"category,omitempty"` // "meat", "vegetable", "seasoning", etc.
 }
 
@@ -22,29 +22,56 @@ type DailyRecipe struct {
 
 // MealPlan represents a weekly meal plan
 type MealPlan struct {
-	ID         int          `json:"id" db:"id"`
-	WeekData   MealPlanData `json:"week_data" db:"week_data"`
-	CreatedAt  time.Time    `json:"created_at" db:"created_at"`
-	UpdatedAt  time.Time    `json:"updated_at" db:"updated_at"`
+	ID        int          `json:"id" db:"id"`
+	WeekData  MealPlanData `json:"week_data" db:"week_data"`
+	CreatedAt time.Time    `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time    `json:"updated_at" db:"updated_at"`
+}
+
+// CreateMealPlanRequest represents a meal plan creation request
+type CreateMealPlanRequest struct {
+	StartDate   string              `json:"start_date"`
+	Preferences MealPlanPreferences `json:"preferences"`
+}
+
+// MealPlanPreferences represents user preferences for meal planning
+type MealPlanPreferences struct {
+	MaxCookingTime      int      `json:"max_cooking_time"`
+	ExcludeIngredients  []string `json:"exclude_ingredients"`
+	PreferredTags       []string `json:"preferred_tags"`
+	BudgetPerWeek       int      `json:"budget_per_week"`
+	HouseholdSize       int      `json:"household_size"`
+	DietaryRestrictions []string `json:"dietary_restrictions"`
+}
+
+// SearchCriteria represents recipe search criteria
+type SearchCriteria struct {
+	Tag              string  `json:"tag" form:"tag"`
+	Ingredient       string  `json:"ingredient" form:"ingredient"`
+	MaxCookingTime   int     `json:"max_cooking_time" form:"max_cooking_time"`
+	MinLazinessScore float64 `json:"min_laziness_score" form:"min_laziness_score"`
+	Season           string  `json:"season" form:"season"`
+	Limit            int     `json:"limit" form:"limit"`
+	Offset           int     `json:"offset" form:"offset"`
 }
 
 // MealPlanData holds the JSON-stored meal plan information
 type MealPlanData struct {
-	StartDate          string                  `json:"start_date" binding:"required"`
-	ShoppingList       []ShoppingItem          `json:"shopping_list" binding:"required"`
-	DailyRecipes       map[string]DailyRecipe  `json:"daily_recipes" binding:"required"`
-	TotalCostEstimate  int                     `json:"total_cost_estimate"`
-	WeekTheme          string                  `json:"week_theme,omitempty"`
-	IngredientReuse    map[string][]string     `json:"ingredient_reuse,omitempty"` // ingredient -> days used
-	NutritionSummary   *WeekNutritionSummary   `json:"nutrition_summary,omitempty"`
+	StartDate         string                 `json:"start_date" binding:"required"`
+	ShoppingList      []ShoppingItem         `json:"shopping_list" binding:"required"`
+	DailyRecipes      map[string]DailyRecipe `json:"daily_recipes" binding:"required"`
+	TotalCostEstimate int                    `json:"total_cost_estimate"`
+	WeekTheme         string                 `json:"week_theme,omitempty"`
+	IngredientReuse   map[string][]string    `json:"ingredient_reuse,omitempty"` // ingredient -> days used
+	NutritionSummary  *WeekNutritionSummary  `json:"nutrition_summary,omitempty"`
 }
 
 // WeekNutritionSummary holds weekly nutrition totals
 type WeekNutritionSummary struct {
-	TotalCalories int `json:"total_calories"`
-	AvgCaloriesPerDay int `json:"avg_calories_per_day"`
-	TotalProtein  int `json:"total_protein"`
-	BalanceScore  float64 `json:"balance_score"` // 1-10, how balanced the week is
+	TotalCalories     int     `json:"total_calories"`
+	AvgCaloriesPerDay int     `json:"avg_calories_per_day"`
+	TotalProtein      int     `json:"total_protein"`
+	BalanceScore      float64 `json:"balance_score"` // 1-10, how balanced the week is
 }
 
 // Validate validates the meal plan data
@@ -58,7 +85,7 @@ func (m *MealPlanData) Validate() error {
 	if len(m.DailyRecipes) == 0 {
 		return ErrNoDailyRecipes
 	}
-	
+
 	// Check that we have recipes for the expected days
 	expectedDays := []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
 	for _, day := range expectedDays {
@@ -69,7 +96,7 @@ func (m *MealPlanData) Validate() error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -85,7 +112,7 @@ func (m *MealPlanData) CalculateTotalCost() int {
 // GetIngredientUsage analyzes which ingredients are used on which days
 func (m *MealPlanData) GetIngredientUsage() map[string][]string {
 	usage := make(map[string][]string)
-	
+
 	for day := range m.DailyRecipes {
 		// This would require recipe data to determine ingredients
 		// For now, create a placeholder structure
@@ -99,7 +126,7 @@ func (m *MealPlanData) GetIngredientUsage() map[string][]string {
 			}
 		}
 	}
-	
+
 	return usage
 }
 
@@ -107,26 +134,26 @@ func (m *MealPlanData) GetIngredientUsage() map[string][]string {
 func (m *MealPlanData) OptimizeShoppingList() {
 	// Group items by category
 	categoryMap := make(map[string][]ShoppingItem)
-	
+
 	for _, item := range m.ShoppingList {
 		if item.Category == "" {
 			item.Category = categorizeIngredient(item.Item)
 		}
 		categoryMap[item.Category] = append(categoryMap[item.Category], item)
 	}
-	
+
 	// Rebuild shopping list with optimized order
 	optimizedList := []ShoppingItem{}
-	
+
 	// Order: vegetables -> meat -> dairy -> seasonings -> others
 	categoryOrder := []string{"vegetable", "meat", "dairy", "seasoning", "grain", "others"}
-	
+
 	for _, category := range categoryOrder {
 		if items, exists := categoryMap[category]; exists {
 			optimizedList = append(optimizedList, items...)
 		}
 	}
-	
+
 	m.ShoppingList = optimizedList
 }
 
@@ -138,7 +165,7 @@ func categorizeIngredient(ingredient string) string {
 	seasoningKeywords := []string{"醤油", "味噌", "塩", "胡椒", "油", "みりん", "酒"}
 	dairyKeywords := []string{"卵", "牛乳", "チーズ", "バター"}
 	grainKeywords := []string{"米", "パン", "麺", "うどん", "そば"}
-	
+
 	for _, keyword := range meatKeywords {
 		if contains(ingredient, keyword) {
 			return "meat"
@@ -164,18 +191,18 @@ func categorizeIngredient(ingredient string) string {
 			return "grain"
 		}
 	}
-	
+
 	return "others"
 }
 
 // contains checks if a string contains a substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (s == substr || 
-		    (len(s) > len(substr) && 
-		     (s[:len(substr)] == substr || 
-		      s[len(s)-len(substr):] == substr ||
-		      containsSubstring(s, substr))))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			(len(s) > len(substr) &&
+				(s[:len(substr)] == substr ||
+					s[len(s)-len(substr):] == substr ||
+					containsSubstring(s, substr))))
 }
 
 func containsSubstring(s, substr string) bool {

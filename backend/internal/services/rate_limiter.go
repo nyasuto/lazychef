@@ -8,11 +8,11 @@ import (
 
 // RateLimiter implements a rate limiter for API calls
 type RateLimiter struct {
-	tokens    chan struct{}
-	ticker    *time.Ticker
-	rate      int
-	mu        sync.Mutex
-	stopped   bool
+	tokens  chan struct{}
+	ticker  *time.Ticker
+	rate    int
+	mu      sync.Mutex
+	stopped bool
 }
 
 // NewRateLimiter creates a new rate limiter
@@ -22,7 +22,7 @@ func NewRateLimiter(requestsPerMinute int) *RateLimiter {
 		ticker: time.NewTicker(time.Minute / time.Duration(requestsPerMinute)),
 		rate:   requestsPerMinute,
 	}
-	
+
 	// Fill initial tokens
 	for i := 0; i < requestsPerMinute; i++ {
 		select {
@@ -31,10 +31,10 @@ func NewRateLimiter(requestsPerMinute int) *RateLimiter {
 			break
 		}
 	}
-	
+
 	// Start the token replenishment goroutine
 	go rl.refillTokens()
-	
+
 	return rl
 }
 
@@ -69,7 +69,7 @@ func (rl *RateLimiter) refillTokens() {
 				return
 			}
 			rl.mu.Unlock()
-			
+
 			// Try to add a token
 			select {
 			case rl.tokens <- struct{}{}:
@@ -84,7 +84,7 @@ func (rl *RateLimiter) refillTokens() {
 func (rl *RateLimiter) Stop() {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
-	
+
 	if !rl.stopped {
 		rl.stopped = true
 		rl.ticker.Stop()

@@ -73,7 +73,7 @@ func GetRecipeGenerationPrompt(req RecipeGenerationRequest) PromptTemplate {
 最大10点、最小1点でスコアを算出してください。`
 
 	userPrompt := formatUserPrompt(req)
-	
+
 	return PromptTemplate{
 		SystemPrompt: systemPrompt,
 		UserPrompt:   userPrompt,
@@ -83,42 +83,42 @@ func GetRecipeGenerationPrompt(req RecipeGenerationRequest) PromptTemplate {
 // formatUserPrompt formats the user prompt based on the request
 func formatUserPrompt(req RecipeGenerationRequest) string {
 	var prompt strings.Builder
-	
+
 	prompt.WriteString("以下の条件でずぼらな人向けのレシピを1つ生成してください：\n\n")
-	
+
 	// Ingredients
 	prompt.WriteString(fmt.Sprintf("## 使用する材料\n%s\n\n", strings.Join(req.Ingredients, ", ")))
-	
+
 	// Season
 	seasonMap := map[string]string{
 		"spring": "春",
-		"summer": "夏", 
+		"summer": "夏",
 		"fall":   "秋",
 		"winter": "冬",
 		"all":    "オールシーズン",
 	}
 	prompt.WriteString(fmt.Sprintf("## 季節\n%s\n\n", seasonMap[req.Season]))
-	
+
 	// Cooking time
 	prompt.WriteString(fmt.Sprintf("## 最大調理時間\n%d分以内\n\n", req.MaxCookingTime))
-	
+
 	// Servings
 	servings := req.Servings
 	if servings <= 0 {
 		servings = 1
 	}
 	prompt.WriteString(fmt.Sprintf("## 人数\n%d人分\n\n", servings))
-	
+
 	// Constraints
 	if len(req.Constraints) > 0 {
 		prompt.WriteString(fmt.Sprintf("## 制約条件\n%s\n\n", strings.Join(req.Constraints, ", ")))
 	}
-	
+
 	// Preferences
 	if len(req.Preferences) > 0 {
 		prompt.WriteString(fmt.Sprintf("## 好み・要望\n%s\n\n", strings.Join(req.Preferences, ", ")))
 	}
-	
+
 	// Additional instructions
 	prompt.WriteString("## 追加指示\n")
 	prompt.WriteString("- 手順は簡潔で分かりやすく書く\n")
@@ -126,7 +126,7 @@ func formatUserPrompt(req RecipeGenerationRequest) string {
 	prompt.WriteString("- 初心者でも失敗しない具体的な指示を含める\n")
 	prompt.WriteString("- 時短テクニックがあれば含める\n")
 	prompt.WriteString("- JSON形式での出力を厳守する\n")
-	
+
 	return prompt.String()
 }
 
@@ -163,7 +163,7 @@ func GetBatchRecipeGenerationPrompt(req RecipeGenerationRequest, count int) Prom
 }`
 
 	userPrompt := formatBatchUserPrompt(req, count)
-	
+
 	return PromptTemplate{
 		SystemPrompt: systemPrompt,
 		UserPrompt:   userPrompt,
@@ -173,35 +173,35 @@ func GetBatchRecipeGenerationPrompt(req RecipeGenerationRequest, count int) Prom
 // formatBatchUserPrompt formats the user prompt for batch generation
 func formatBatchUserPrompt(req RecipeGenerationRequest, count int) string {
 	var prompt strings.Builder
-	
+
 	prompt.WriteString(fmt.Sprintf("以下の条件で%d個のずぼらレシピを生成してください：\n\n", count))
-	
+
 	// Basic conditions
 	seasonMap := map[string]string{
 		"spring": "春", "summer": "夏", "fall": "秋", "winter": "冬", "all": "オールシーズン",
 	}
-	
+
 	prompt.WriteString(fmt.Sprintf("材料: %s\n", strings.Join(req.Ingredients, ", ")))
 	prompt.WriteString(fmt.Sprintf("季節: %s\n", seasonMap[req.Season]))
 	prompt.WriteString(fmt.Sprintf("最大調理時間: %d分\n", req.MaxCookingTime))
-	
+
 	servings := req.Servings
 	if servings <= 0 {
 		servings = 1
 	}
 	prompt.WriteString(fmt.Sprintf("人数: %d人分\n\n", servings))
-	
+
 	// Additional requirements
 	prompt.WriteString("## 要求事項\n")
 	prompt.WriteString("- 各レシピは調理法が異なること（炒める、煮る、レンジなど）\n")
 	prompt.WriteString("- 同じ材料でもバリエーション豊富に\n")
 	prompt.WriteString("- すべてのレシピがずぼらスコア7.0以上\n")
 	prompt.WriteString("- JSON配列形式での出力を厳守\n")
-	
+
 	if len(req.Constraints) > 0 {
 		prompt.WriteString(fmt.Sprintf("\n制約: %s\n", strings.Join(req.Constraints, ", ")))
 	}
-	
+
 	return prompt.String()
 }
 

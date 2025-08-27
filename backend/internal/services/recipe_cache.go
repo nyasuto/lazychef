@@ -13,11 +13,11 @@ type CacheEntry struct {
 
 // RecipeCache implements an in-memory cache for recipe generation results
 type RecipeCache struct {
-	mu       sync.RWMutex
-	data     map[string]*CacheEntry
-	maxSize  int
-	ttl      time.Duration
-	cleanup  *time.Ticker
+	mu      sync.RWMutex
+	data    map[string]*CacheEntry
+	maxSize int
+	ttl     time.Duration
+	cleanup *time.Ticker
 }
 
 // NewRecipeCache creates a new recipe cache
@@ -28,10 +28,10 @@ func NewRecipeCache(maxSize int, ttl time.Duration) *RecipeCache {
 		ttl:     ttl,
 		cleanup: time.NewTicker(ttl / 4), // Clean up every 1/4 of TTL
 	}
-	
+
 	// Start cleanup goroutine
 	go cache.cleanupExpired()
-	
+
 	return cache
 }
 
@@ -39,18 +39,18 @@ func NewRecipeCache(maxSize int, ttl time.Duration) *RecipeCache {
 func (c *RecipeCache) Get(key string) *GenerationResult {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	entry, exists := c.data[key]
 	if !exists {
 		return nil
 	}
-	
+
 	// Check if expired
 	if time.Now().After(entry.ExpiresAt) {
 		// Don't delete here to avoid write lock, let cleanup goroutine handle it
 		return nil
 	}
-	
+
 	// Return a copy to avoid race conditions
 	result := *entry.Data
 	return &result
@@ -60,12 +60,12 @@ func (c *RecipeCache) Get(key string) *GenerationResult {
 func (c *RecipeCache) Set(key string, value *GenerationResult) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	// Check if we need to make space
 	if len(c.data) >= c.maxSize {
 		c.evictOldest()
 	}
-	
+
 	// Store the entry
 	c.data[key] = &CacheEntry{
 		Data:      value,
@@ -77,7 +77,7 @@ func (c *RecipeCache) Set(key string, value *GenerationResult) {
 func (c *RecipeCache) Delete(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	delete(c.data, key)
 }
 
@@ -85,7 +85,7 @@ func (c *RecipeCache) Delete(key string) {
 func (c *RecipeCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.data = make(map[string]*CacheEntry)
 }
 
@@ -93,7 +93,7 @@ func (c *RecipeCache) Clear() {
 func (c *RecipeCache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	return len(c.data)
 }
 
@@ -101,16 +101,16 @@ func (c *RecipeCache) Size() int {
 func (c *RecipeCache) GetStats() map[string]interface{} {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	now := time.Now()
 	expiredCount := 0
-	
+
 	for _, entry := range c.data {
 		if now.After(entry.ExpiresAt) {
 			expiredCount++
 		}
 	}
-	
+
 	return map[string]interface{}{
 		"total_entries":   len(c.data),
 		"expired_entries": expiredCount,
@@ -124,14 +124,14 @@ func (c *RecipeCache) GetStats() map[string]interface{} {
 func (c *RecipeCache) evictOldest() {
 	var oldestKey string
 	var oldestTime time.Time
-	
+
 	for key, entry := range c.data {
 		if oldestKey == "" || entry.ExpiresAt.Before(oldestTime) {
 			oldestKey = key
 			oldestTime = entry.ExpiresAt
 		}
 	}
-	
+
 	if oldestKey != "" {
 		delete(c.data, oldestKey)
 	}
@@ -142,13 +142,13 @@ func (c *RecipeCache) cleanupExpired() {
 	for range c.cleanup.C {
 		c.mu.Lock()
 		now := time.Now()
-		
+
 		for key, entry := range c.data {
 			if now.After(entry.ExpiresAt) {
 				delete(c.data, key)
 			}
 		}
-		
+
 		c.mu.Unlock()
 	}
 }
@@ -164,12 +164,12 @@ func (c *RecipeCache) Stop() {
 func (c *RecipeCache) Keys() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	keys := make([]string, 0, len(c.data))
 	for key := range c.data {
 		keys = append(keys, key)
 	}
-	
+
 	return keys
 }
 
@@ -177,11 +177,11 @@ func (c *RecipeCache) Keys() []string {
 func (c *RecipeCache) HasKey(key string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	entry, exists := c.data[key]
 	if !exists {
 		return false
 	}
-	
+
 	return time.Now().Before(entry.ExpiresAt)
 }

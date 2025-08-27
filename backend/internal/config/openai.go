@@ -9,14 +9,14 @@ import (
 
 // OpenAIConfig holds OpenAI API configuration
 type OpenAIConfig struct {
-	APIKey              string
-	Model               string
-	MaxTokens           int
-	Temperature         float32
-	RequestTimeout      time.Duration
-	MaxRetries          int
-	RetryDelay          time.Duration
-	RequestsPerMinute   int
+	APIKey                  string
+	Model                   string
+	MaxTokens               int
+	Temperature             float32
+	RequestTimeout          time.Duration
+	MaxRetries              int
+	RetryDelay              time.Duration
+	RequestsPerMinute       int
 	RecipeGenerationTimeout time.Duration
 }
 
@@ -26,24 +26,24 @@ func LoadOpenAIConfig() (*OpenAIConfig, error) {
 	if apiKey == "" {
 		return nil, errors.New("OPENAI_API_KEY environment variable is required")
 	}
-	
+
 	config := &OpenAIConfig{
-		APIKey:      apiKey,
-		Model:       getEnvOrDefault("OPENAI_MODEL", "gpt-3.5-turbo"),
-		MaxTokens:   getEnvAsIntOrDefault("OPENAI_MAX_TOKENS", 1000),
-		Temperature: getEnvAsFloatOrDefault("OPENAI_TEMPERATURE", 0.7),
-		RequestTimeout: getEnvAsDurationOrDefault("OPENAI_REQUEST_TIMEOUT", 30*time.Second),
-		MaxRetries:     getEnvAsIntOrDefault("OPENAI_MAX_RETRIES", 3),
-		RetryDelay:     getEnvAsDurationOrDefault("OPENAI_RETRY_DELAY", 2*time.Second),
-		RequestsPerMinute: getEnvAsIntOrDefault("OPENAI_REQUESTS_PER_MINUTE", 60),
+		APIKey:                  apiKey,
+		Model:                   getEnvOrDefault("OPENAI_MODEL", "gpt-3.5-turbo"),
+		MaxTokens:               getEnvAsIntOrDefault("OPENAI_MAX_TOKENS", 1000),
+		Temperature:             getEnvAsFloatOrDefault("OPENAI_TEMPERATURE", 0.7),
+		RequestTimeout:          getEnvAsDurationOrDefault("OPENAI_REQUEST_TIMEOUT", 30*time.Second),
+		MaxRetries:              getEnvAsIntOrDefault("OPENAI_MAX_RETRIES", 3),
+		RetryDelay:              getEnvAsDurationOrDefault("OPENAI_RETRY_DELAY", 2*time.Second),
+		RequestsPerMinute:       getEnvAsIntOrDefault("OPENAI_REQUESTS_PER_MINUTE", 60),
 		RecipeGenerationTimeout: getEnvAsDurationOrDefault("RECIPE_GENERATION_TIMEOUT", 30*time.Second),
 	}
-	
+
 	// Validate configuration
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	
+
 	return config, nil
 }
 

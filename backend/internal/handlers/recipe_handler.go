@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"lazychef/internal/models"
 	"lazychef/internal/services"
 )
 
@@ -24,7 +25,7 @@ func NewRecipeHandler(generatorService *services.RecipeGeneratorService) *Recipe
 // GenerateRecipe handles POST /api/recipes/generate
 func (h *RecipeHandler) GenerateRecipe(c *gin.Context) {
 	var req services.RecipeGenerationRequest
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Invalid request format",
@@ -32,7 +33,7 @@ func (h *RecipeHandler) GenerateRecipe(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	// Generate recipe
 	result, err := h.generatorService.GenerateRecipe(c.Request.Context(), req)
 	if err != nil {
@@ -42,7 +43,7 @@ func (h *RecipeHandler) GenerateRecipe(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	if result.Error != "" {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Recipe generation error",
@@ -50,7 +51,7 @@ func (h *RecipeHandler) GenerateRecipe(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"recipe":   result.Recipe,
 		"metadata": result.Metadata,
@@ -60,7 +61,7 @@ func (h *RecipeHandler) GenerateRecipe(c *gin.Context) {
 // GenerateBatchRecipes handles POST /api/recipes/generate-batch
 func (h *RecipeHandler) GenerateBatchRecipes(c *gin.Context) {
 	var req services.BatchGenerationRequest
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Invalid request format",
@@ -68,7 +69,7 @@ func (h *RecipeHandler) GenerateBatchRecipes(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	// Generate batch recipes
 	result, err := h.generatorService.GenerateBatchRecipes(c.Request.Context(), req)
 	if err != nil {
@@ -78,7 +79,7 @@ func (h *RecipeHandler) GenerateBatchRecipes(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	if result.Error != "" {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Batch recipe generation error",
@@ -86,7 +87,7 @@ func (h *RecipeHandler) GenerateBatchRecipes(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"recipes":  result.Recipes,
 		"metadata": result.Metadata,
@@ -124,24 +125,24 @@ func (h *RecipeHandler) TestRecipeGeneration(c *gin.Context) {
 		MaxCookingTime: 10,
 		Servings:       1,
 	}
-	
+
 	// Override with query parameters if provided
 	if ingredients := c.Query("ingredients"); ingredients != "" {
 		// Simple comma-separated parsing
 		// In production, this would be more sophisticated
 		req.Ingredients = []string{ingredients}
 	}
-	
+
 	if season := c.Query("season"); season != "" {
 		req.Season = season
 	}
-	
+
 	if cookingTimeStr := c.Query("cooking_time"); cookingTimeStr != "" {
 		if cookingTime, err := strconv.Atoi(cookingTimeStr); err == nil {
 			req.MaxCookingTime = cookingTime
 		}
 	}
-	
+
 	// Generate recipe
 	result, err := h.generatorService.GenerateRecipe(c.Request.Context(), req)
 	if err != nil {
@@ -151,11 +152,57 @@ func (h *RecipeHandler) TestRecipeGeneration(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Test recipe generation successful",
 		"request":  req,
 		"recipe":   result.Recipe,
 		"metadata": result.Metadata,
+	})
+}
+
+// SearchRecipes handles GET /api/recipes/search
+func (h *RecipeHandler) SearchRecipes(c *gin.Context) {
+	var criteria models.SearchCriteria
+
+	// Bind query parameters
+	if err := c.ShouldBindQuery(&criteria); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid search parameters",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Set defaults
+	if criteria.Limit <= 0 || criteria.Limit > 50 {
+		criteria.Limit = 20
+	}
+
+	// For now, return mock search results
+	// TODO: Implement actual database search
+	mockRecipes := []models.RecipeData{
+		{
+			Title:       "豚キャベツ炒め",
+			CookingTime: 10,
+			Ingredients: []models.Ingredient{
+				{Name: "豚こま肉", Amount: "200g"},
+				{Name: "キャベツ", Amount: "1/4個"},
+			},
+			Steps:         []string{"材料を切る", "炒める", "味付けする"},
+			LazinessScore: 9.0,
+			Season:        "all",
+			Tags:          []string{"簡単", "10分以内"},
+		},
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"recipes": mockRecipes,
+			"total":   1,
+			"limit":   criteria.Limit,
+			"offset":  criteria.Offset,
+		},
 	})
 }

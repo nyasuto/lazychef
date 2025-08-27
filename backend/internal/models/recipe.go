@@ -21,25 +21,25 @@ type NutritionInfo struct {
 
 // Recipe represents a cooking recipe with laziness optimization
 type Recipe struct {
-	ID        int       `json:"id" db:"id"`
+	ID        int        `json:"id" db:"id"`
 	Data      RecipeData `json:"data" db:"data"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	CreatedAt time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
 }
 
 // RecipeData holds the JSON-stored recipe information
 type RecipeData struct {
-	Title          string         `json:"title" binding:"required"`
-	CookingTime    int            `json:"cooking_time" binding:"required,min=1"`
-	Ingredients    []Ingredient   `json:"ingredients" binding:"required,min=1"`
-	Steps          []string       `json:"steps" binding:"required,min=1"`
-	Tags           []string       `json:"tags"`
-	Season         string         `json:"season" binding:"required,oneof=spring summer fall winter all"`
-	LazinessScore  float64        `json:"laziness_score" binding:"required,min=1.0,max=10.0"`
-	NutritionInfo  *NutritionInfo `json:"nutrition_info,omitempty"`
-	ServingSize    int            `json:"serving_size" binding:"min=1"`
-	Difficulty     string         `json:"difficulty,omitempty" binding:"omitempty,oneof=easy medium hard"`
-	TotalCost      int            `json:"total_cost,omitempty"` // Cost in yen
+	Title         string         `json:"title" binding:"required"`
+	CookingTime   int            `json:"cooking_time" binding:"required,min=1"`
+	Ingredients   []Ingredient   `json:"ingredients" binding:"required,min=1"`
+	Steps         []string       `json:"steps" binding:"required,min=1"`
+	Tags          []string       `json:"tags"`
+	Season        string         `json:"season" binding:"required,oneof=spring summer fall winter all"`
+	LazinessScore float64        `json:"laziness_score" binding:"required,min=1.0,max=10.0"`
+	NutritionInfo *NutritionInfo `json:"nutrition_info,omitempty"`
+	ServingSize   int            `json:"serving_size" binding:"min=1"`
+	Difficulty    string         `json:"difficulty,omitempty" binding:"omitempty,oneof=easy medium hard"`
+	TotalCost     int            `json:"total_cost,omitempty"` // Cost in yen
 }
 
 // Validate validates the recipe data
@@ -68,7 +68,7 @@ func (r *RecipeData) Validate() error {
 // CalculateLazinessScore automatically calculates laziness score based on recipe attributes
 func (r *RecipeData) CalculateLazinessScore() float64 {
 	score := 0.0
-	
+
 	// Cooking time factor (max 3 points)
 	if r.CookingTime <= 5 {
 		score += 3.0
@@ -79,7 +79,7 @@ func (r *RecipeData) CalculateLazinessScore() float64 {
 	} else if r.CookingTime <= 30 {
 		score += 1.0
 	}
-	
+
 	// Steps factor (max 3 points)
 	stepCount := len(r.Steps)
 	if stepCount <= 2 {
@@ -91,7 +91,7 @@ func (r *RecipeData) CalculateLazinessScore() float64 {
 	} else if stepCount <= 5 {
 		score += 1.0
 	}
-	
+
 	// Ingredients factor (max 2 points)
 	ingredientCount := len(r.Ingredients)
 	if ingredientCount <= 3 {
@@ -101,7 +101,7 @@ func (r *RecipeData) CalculateLazinessScore() float64 {
 	} else if ingredientCount <= 7 {
 		score += 1.0
 	}
-	
+
 	// Tag-based bonus (max 2 points)
 	for _, tag := range r.Tags {
 		switch tag {
@@ -113,12 +113,12 @@ func (r *RecipeData) CalculateLazinessScore() float64 {
 			score += 0.3
 		}
 	}
-	
+
 	// Cap at 10.0
 	if score > 10.0 {
 		score = 10.0
 	}
-	
+
 	return score
 }
 
