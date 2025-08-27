@@ -31,23 +31,24 @@ jobs:
           ${{ runner.os }}-go-quality-
           ${{ runner.os }}-go-
           
-    - name: Install golangci-lint
-      run: |
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
-        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-        
     - name: Install dependencies
       run: |
         cd backend
         go mod download
         
-    - name: Run make quality
-      run: make quality
-      
-    - name: Run golangci-lint
+    - name: Run make quality (without lint)
       run: |
         cd backend
-        golangci-lint run ./...
+        go fmt ./...
+        go test -v ./...
+        
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: latest
+        install-mode: goinstall
+        working-directory: backend
+        args: --timeout=5m ./...
         
     - name: Check mod tidy
       run: |
