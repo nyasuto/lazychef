@@ -55,7 +55,7 @@ func (db *Database) Close() error {
 
 // Health checks database health
 func (db *Database) Health() error {
-	return db.DB.Ping()
+	return db.Ping()
 }
 
 // GetStats returns database statistics
