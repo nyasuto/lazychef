@@ -2,157 +2,85 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## System Context
+- **Project**: LazyChef - AI-powered meal planning for lazy cooks
+- **Backend**: Go 1.21 + Gin 1.10 + SQLite3
+- **Frontend**: React 18 + Tailwind CSS (not yet implemented)
+- **AI**: OpenAI API (gpt-3.5-turbo)
 
-LazyChef is a personal meal planning service that helps users maintain their cooking habits by providing AI-powered weekly shopping lists and recipes optimized for lazy cooks. The core concept is a "buy this, cook for a week" bulk shopping proposal system.
+## File Map
+```
+backend/
+├── cmd/api/main.go         # Entry point
+├── internal/
+│   ├── database/           # SQLite connection wrapper
+│   ├── handlers/           # HTTP request handlers
+│   ├── services/           # Business logic (generator, planner)
+│   ├── models/             # Data structures
+│   └── config/             # Configuration management
+├── data/                   # SQLite database files (gitignored)
+scripts/
+├── init_db.sql             # Database schema
+└── init_db.go              # Database initialization
+```
 
-## Development Commands
-
-### Backend (Go)
+## Commands
 ```bash
-# Initialize Go modules
-go mod init lazychef
-go mod tidy
+# Backend
+make run                    # Start API server (port 8080)
+make test                   # Run all tests with coverage
+make build                  # Build binary to bin/lazychef
+make init-db                # Initialize database
 
-# Install dependencies
-go get -u github.com/gin-gonic/gin
-go get -u github.com/mattn/go-sqlite3
-go get -u github.com/joho/godotenv
+# Database
+cd scripts && go run init_db.go  # Create DB with sample data
 
-# Run backend server
-go run cmd/api/main.go
-
-# Run tests
-go test ./...
-go test -v -cover ./...
-
-# Build binary
-go build -o bin/lazychef cmd/api/main.go
+# Quick test
+curl localhost:8080/api/health   # Health check
 ```
 
-### Frontend (React)
-```bash
-# Install dependencies
-npm install
+## Critical Constraints
+- **NEVER commit to main branch** - Always use feature branches
+- **NEVER merge PRs automatically** - Human review required
+- **Branch naming**: `feat/issue-X-description`, `fix/issue-X-description`
+- **All GitHub issues and PRs must be in Japanese**
 
-# Start development server
-npm start
-
-# Run tests
-npm test
-
-# Build for production
-npm run build
+## API Endpoints
+```
+POST /api/recipes/generate        # Generate single recipe
+POST /api/recipes/generate-batch  # Generate multiple recipes
+POST /api/meal-plans/create       # Create weekly plan
+GET  /api/recipes/search          # Search recipes
+GET  /api/health                  # Service health check
 ```
 
-### Database
-```bash
-# Initialize SQLite database
-go run scripts/init_db.go
+## Database Schema
+- **recipes**: JSON data column with virtual columns for indexing
+- **meal_plans**: Weekly plans with shopping lists
+- **user_preferences**: User settings (single-user MVP)
+- Use `json_extract()` for queries: `WHERE json_extract(data, '$.laziness_score') > 8`
 
-# Run database migrations
-sqlite3 backend/data/recipes.db < scripts/init_db.sql
-```
-
-## Architecture Overview
-
-### Tech Stack
-- **Backend**: Go with Gin framework, SQLite with JSON features for data storage
-- **Frontend**: React with Tailwind CSS for styling
-- **AI Integration**: OpenAI API for recipe generation
-- **API Communication**: RESTful JSON APIs with CORS enabled for localhost:3000
-
-### Core Components
-
-1. **Recipe Generation Service** (`backend/internal/services/generator.go`)
-   - Integrates with OpenAI API to generate recipes
-   - Optimizes for "laziness score" (quick, simple recipes)
-   - Considers seasonal ingredients and cooking time constraints
-
-2. **Weekly Planner Service** (`backend/internal/services/planner.go`)
-   - Creates weekly meal plans with ingredient reuse optimization
-   - Generates consolidated shopping lists
-   - Estimates total costs
-
-3. **Database Layer** (`backend/internal/database/sqlite.go`)
-   - SQLite with JSON columns for flexible schema
-   - Three main tables: recipes, meal_plans, user_preferences
-   - All recipe and plan data stored as JSON for easy querying
-
-4. **API Handlers** (`backend/internal/handlers/`)
-   - Recipe generation endpoint: POST /api/recipes/generate
-   - Meal plan creation: POST /api/meal-plans/create
-   - Recipe search: GET /api/recipes/search
-
-## Key API Endpoints
-
-```
-POST /api/recipes/generate
-- Body: { ingredients: [], season: string, max_cooking_time: number }
-- Returns: Generated recipes with laziness scores
-
-POST /api/meal-plans/create
-- Body: { start_date: string, preferences: object }
-- Returns: Weekly plan with shopping list and daily recipes
-
-GET /api/recipes/search
-- Query params: tag, ingredient
-- Returns: Filtered recipe list
-```
-
-## Development Guidelines
-
-### Working with the Database
-- All recipe data is stored as JSON in SQLite
-- Use JSON queries for filtering: `SELECT * FROM recipes WHERE json_extract(data, '$.laziness_score') > 8`
-- Keep laziness_score between 1-10 (10 = easiest)
-
-### Frontend Components Structure
-```
-components/
-├── RecipeCard.jsx      # Individual recipe display
-├── WeeklyPlan.jsx      # 7-day meal plan grid
-├── ShoppingList.jsx    # Consolidated ingredients list
-└── RecipeGenerator.jsx # AI recipe generation form
-```
-
-### Environment Variables
-Required in `.env`:
-```
-OPENAI_API_KEY=your_api_key_here
-PORT=8080
+## Environment Variables
+```env
+OPENAI_API_KEY=required          # OpenAI API key
+PORT=8080                        # Server port
 FRONTEND_URL=http://localhost:3000
 ```
 
-### CORS Configuration
-Backend allows requests from `http://localhost:3000`. Middleware is in `backend/internal/middleware/cors.go`.
-
-## Data Models
-
-### Recipe JSON Structure
-- title: string (recipe name)
-- cooking_time: number (minutes)
-- ingredients: array of {name, amount}
-- steps: array of strings (simplified instructions)
-- tags: array of strings
-- laziness_score: number (1-10, higher = easier)
-- season: string (spring/summer/fall/winter/all)
-
-### Meal Plan JSON Structure
-- start_date: ISO date string
-- shopping_list: array of {item, amount}
-- daily_recipes: object mapping day to recipe
-- total_cost_estimate: number (yen)
-
-## Testing Guidelines
-
-- Backend: Use Go's built-in testing with coverage reports
-- Frontend: Jest for React component testing
-- API: Test CORS headers and JSON responses
-- Database: Test JSON queries and data integrity
+## Key Patterns
+- **Laziness Score**: 1-10 (10 = easiest), auto-calculated
+- **Recipe Steps**: Maximum 3 steps for all recipes
+- **Cooking Time**: Target < 15 minutes
+- **Error Handling**: Comprehensive with retry logic
+- **Caching**: 24-hour in-memory cache for API cost reduction
+- **Rate Limiting**: 60 requests/minute to OpenAI
 
 ## Performance Targets
 - Recipe generation: < 3 seconds
-- Weekly plan creation: < 5 seconds
 - Database queries: < 100ms
-- Initial page load: < 2 seconds
+- Cache hit rate: > 30%
+
+## Do Not Touch
+- `backend/data/*.db` - Database files
+- Migration files (when created)
+- Generated binaries in `bin/`

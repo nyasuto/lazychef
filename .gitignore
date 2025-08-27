@@ -56,3 +56,5 @@ temp/
 *apikey*
 *secret*
 *credential*
+
+.mcp.json
