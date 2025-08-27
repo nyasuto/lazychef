@@ -1,0 +1,161 @@
+package handlers
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+
+	"lazychef/internal/services"
+)
+
+// RecipeHandler handles recipe-related HTTP requests
+type RecipeHandler struct {
+	generatorService *services.RecipeGeneratorService
+}
+
+// NewRecipeHandler creates a new recipe handler
+func NewRecipeHandler(generatorService *services.RecipeGeneratorService) *RecipeHandler {
+	return &RecipeHandler{
+		generatorService: generatorService,
+	}
+}
+
+// GenerateRecipe handles POST /api/recipes/generate
+func (h *RecipeHandler) GenerateRecipe(c *gin.Context) {
+	var req services.RecipeGenerationRequest
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	// Generate recipe
+	result, err := h.generatorService.GenerateRecipe(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to generate recipe",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	if result.Error != "" {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Recipe generation error",
+			"details": result.Error,
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"recipe":   result.Recipe,
+		"metadata": result.Metadata,
+	})
+}
+
+// GenerateBatchRecipes handles POST /api/recipes/generate-batch
+func (h *RecipeHandler) GenerateBatchRecipes(c *gin.Context) {
+	var req services.BatchGenerationRequest
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	// Generate batch recipes
+	result, err := h.generatorService.GenerateBatchRecipes(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to generate batch recipes",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	if result.Error != "" {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Batch recipe generation error",
+			"details": result.Error,
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"recipes":  result.Recipes,
+		"metadata": result.Metadata,
+	})
+}
+
+// GetGeneratorHealth handles GET /api/recipes/health
+func (h *RecipeHandler) GetGeneratorHealth(c *gin.Context) {
+	health := h.generatorService.GetHealth()
+	c.JSON(http.StatusOK, health)
+}
+
+// ClearCache handles POST /api/recipes/clear-cache
+func (h *RecipeHandler) ClearCache(c *gin.Context) {
+	h.generatorService.ClearCache()
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Cache cleared successfully",
+	})
+}
+
+// GetCacheStats handles GET /api/recipes/cache-stats
+func (h *RecipeHandler) GetCacheStats(c *gin.Context) {
+	// This would need to be implemented in the service
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Cache stats endpoint - to be implemented",
+	})
+}
+
+// TestRecipeGeneration handles GET /api/recipes/test - for quick testing
+func (h *RecipeHandler) TestRecipeGeneration(c *gin.Context) {
+	// Default test request
+	req := services.RecipeGenerationRequest{
+		Ingredients:    []string{"豚こま肉", "キャベツ"},
+		Season:         "all",
+		MaxCookingTime: 10,
+		Servings:       1,
+	}
+	
+	// Override with query parameters if provided
+	if ingredients := c.Query("ingredients"); ingredients != "" {
+		// Simple comma-separated parsing
+		// In production, this would be more sophisticated
+		req.Ingredients = []string{ingredients}
+	}
+	
+	if season := c.Query("season"); season != "" {
+		req.Season = season
+	}
+	
+	if cookingTimeStr := c.Query("cooking_time"); cookingTimeStr != "" {
+		if cookingTime, err := strconv.Atoi(cookingTimeStr); err == nil {
+			req.MaxCookingTime = cookingTime
+		}
+	}
+	
+	// Generate recipe
+	result, err := h.generatorService.GenerateRecipe(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Test recipe generation failed",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Test recipe generation successful",
+		"request":  req,
+		"recipe":   result.Recipe,
+		"metadata": result.Metadata,
+	})
+}

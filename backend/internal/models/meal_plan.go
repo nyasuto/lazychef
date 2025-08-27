@@ -86,7 +86,7 @@ func (m *MealPlanData) CalculateTotalCost() int {
 func (m *MealPlanData) GetIngredientUsage() map[string][]string {
 	usage := make(map[string][]string)
 	
-	for day, recipe := range m.DailyRecipes {
+	for day := range m.DailyRecipes {
 		// This would require recipe data to determine ingredients
 		// For now, create a placeholder structure
 		if m.IngredientReuse != nil {
