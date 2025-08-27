@@ -28,7 +28,8 @@ func NewRateLimiter(requestsPerMinute int) *RateLimiter {
 		select {
 		case rl.tokens <- struct{}{}:
 		default:
-			break
+			// Channel is full, stop filling
+			return rl
 		}
 	}
 
@@ -60,22 +61,19 @@ func (rl *RateLimiter) TryWait() bool {
 
 // refillTokens adds tokens to the bucket at the specified rate
 func (rl *RateLimiter) refillTokens() {
-	for {
-		select {
-		case <-rl.ticker.C:
-			rl.mu.Lock()
-			if rl.stopped {
-				rl.mu.Unlock()
-				return
-			}
+	for range rl.ticker.C {
+		rl.mu.Lock()
+		if rl.stopped {
 			rl.mu.Unlock()
+			return
+		}
+		rl.mu.Unlock()
 
-			// Try to add a token
-			select {
-			case rl.tokens <- struct{}{}:
-			default:
-				// Bucket is full, skip
-			}
+		// Try to add a token
+		select {
+		case rl.tokens <- struct{}{}:
+		default:
+			// Bucket is full, skip
 		}
 	}
 }

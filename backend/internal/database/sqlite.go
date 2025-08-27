@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -34,7 +35,9 @@ func New(config Config) (*Database, error) {
 
 	// Test connection
 	if err := db.Ping(); err != nil {
-		db.Close()
+		if err := db.Close(); err != nil {
+			log.Printf("Warning: failed to close database: %v", err)
+		}
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
@@ -111,7 +114,9 @@ func (db *Database) ExecuteInTx(fn func(*sql.Tx) error) error {
 
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil {
+				log.Printf("Warning: failed to rollback transaction: %v", rbErr)
+			}
 			panic(r)
 		}
 	}()
@@ -143,14 +148,22 @@ func (db *Database) Backup(backupPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create backup database: %w", err)
 	}
-	defer backupDB.Close()
+	defer func() {
+		if err := backupDB.Close(); err != nil {
+			log.Printf("Warning: failed to close backup database: %v", err)
+		}
+	}()
 
 	// Use SQLite's backup API through ATTACH
 	_, err = db.Exec(fmt.Sprintf("ATTACH DATABASE '%s' AS backup", backupPath))
 	if err != nil {
 		return fmt.Errorf("failed to attach backup database: %w", err)
 	}
-	defer db.Exec("DETACH DATABASE backup")
+	defer func() {
+		if _, err := db.Exec("DETACH DATABASE backup"); err != nil {
+			log.Printf("Warning: failed to detach backup database: %v", err)
+		}
+	}()
 
 	// Copy tables
 	tables := []string{"recipes", "meal_plans", "user_preferences"}

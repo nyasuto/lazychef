@@ -1,4 +1,4 @@
-.PHONY: build run test clean setup dev deps lint fmt help
+.PHONY: build run test clean setup dev deps lint fmt quality help
 
 # Go parameters
 GOCMD=go
@@ -77,6 +77,10 @@ lint:
 fmt:
 	@echo "Formatting code..."
 	cd backend && $(GOCMD) fmt ./...
+
+## quality: Run all quality checks (format, lint, test)
+quality: fmt lint test
+	@echo "All quality checks completed successfully!"
 
 ## init-db: Initialize SQLite database
 init-db:

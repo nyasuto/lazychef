@@ -49,6 +49,8 @@ logs/
 # Testing
 coverage/
 *.coverprofile
+coverage.html
+coverage.out
 
 # Temporary files
 tmp/

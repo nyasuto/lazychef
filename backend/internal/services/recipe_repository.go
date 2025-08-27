@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"lazychef/internal/database"
 	"lazychef/internal/models"
+	"log"
 )
 
 // RecipeRepository handles recipe database operations
@@ -54,7 +55,7 @@ func (r *RecipeRepository) GetRecipe(id int) (*models.Recipe, error) {
 	`
 
 	var data string
-	row := r.db.DB.QueryRow(query, id)
+	row := r.db.QueryRow(query, id)
 	if err := row.Scan(&data); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("recipe not found")
@@ -121,11 +122,15 @@ func (r *RecipeRepository) SearchRecipes(criteria models.SearchCriteria) ([]*mod
 		args = append(args, criteria.Offset)
 	}
 
-	rows, err := r.db.DB.Query(query, args...)
+	rows, err := r.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query recipes: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Warning: failed to close rows: %v", err)
+		}
+	}()
 
 	recipes := make([]*models.Recipe, 0)
 	for rows.Next() {
@@ -156,11 +161,15 @@ func (r *RecipeRepository) GetRandomRecipes(count int) ([]*models.Recipe, error)
 		LIMIT ?
 	`
 
-	rows, err := r.db.DB.Query(query, count)
+	rows, err := r.db.Query(query, count)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query random recipes: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Warning: failed to close rows: %v", err)
+		}
+	}()
 
 	recipes := make([]*models.Recipe, 0, count)
 	for rows.Next() {
@@ -188,7 +197,7 @@ func (r *RecipeRepository) CountRecipes() (int, error) {
 	query := `SELECT COUNT(*) FROM recipes`
 
 	var count int
-	row := r.db.DB.QueryRow(query)
+	row := r.db.QueryRow(query)
 	if err := row.Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count recipes: %w", err)
 	}
