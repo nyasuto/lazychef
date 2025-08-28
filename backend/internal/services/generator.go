@@ -66,6 +66,21 @@ func NewRecipeGeneratorService(config *config.OpenAIConfig) (*RecipeGeneratorSer
 	}, nil
 }
 
+// GetClient returns the OpenAI client
+func (s *RecipeGeneratorService) GetClient() *openai.Client {
+	return s.client
+}
+
+// GetRateLimiter returns the rate limiter
+func (s *RecipeGeneratorService) GetRateLimiter() *RateLimiter {
+	return s.rateLimiter
+}
+
+// GetCache returns the recipe cache
+func (s *RecipeGeneratorService) GetCache() *RecipeCache {
+	return s.cache
+}
+
 // GenerateRecipe generates a single recipe based on the request
 func (s *RecipeGeneratorService) GenerateRecipe(ctx context.Context, req RecipeGenerationRequest) (*GenerationResult, error) {
 	startTime := time.Now()

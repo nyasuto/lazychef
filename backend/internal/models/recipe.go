@@ -7,8 +7,9 @@ import (
 
 // Ingredient represents a recipe ingredient
 type Ingredient struct {
-	Name   string `json:"name" binding:"required"`
-	Amount string `json:"amount" binding:"required"`
+	Name   string  `json:"name" binding:"required"`
+	Amount string  `json:"amount" binding:"required"`
+	Notes  *string `json:"notes"` // Optional preparation notes
 }
 
 // NutritionInfo holds nutritional information
@@ -40,6 +41,147 @@ type RecipeData struct {
 	ServingSize   int            `json:"serving_size" binding:"min=1"`
 	Difficulty    string         `json:"difficulty,omitempty" binding:"omitempty,oneof=easy medium hard"`
 	TotalCost     int            `json:"total_cost,omitempty"` // Cost in yen
+}
+
+// RecipeSchema defines the JSON Schema for Structured Outputs
+type RecipeSchema struct {
+	Type                 string                    `json:"type"`
+	Properties           map[string]SchemaProperty `json:"properties"`
+	Required             []string                  `json:"required"`
+	AdditionalProperties bool                      `json:"additionalProperties"`
+}
+
+type SchemaProperty struct {
+	Type                 interface{}               `json:"type,omitempty"` // Can be string or []string
+	Format               string                    `json:"format,omitempty"`
+	Description          string                    `json:"description,omitempty"`
+	Minimum              *float64                  `json:"minimum,omitempty"`
+	Maximum              *float64                  `json:"maximum,omitempty"`
+	MinLength            *int                      `json:"minLength,omitempty"`
+	MaxLength            *int                      `json:"maxLength,omitempty"`
+	Items                *SchemaProperty           `json:"items,omitempty"`
+	Properties           map[string]SchemaProperty `json:"properties,omitempty"`
+	Required             []string                  `json:"required,omitempty"`
+	Enum                 []string                  `json:"enum,omitempty"`
+	MinItems             *int                      `json:"minItems,omitempty"`
+	MaxItems             *int                      `json:"maxItems,omitempty"`
+	AdditionalProperties *bool                     `json:"additionalProperties,omitempty"`
+}
+
+// GetRecipeJSONSchema returns the JSON Schema for recipe generation with food safety validation
+func GetRecipeJSONSchema() RecipeSchema {
+	minOne := 1
+	maxThree := 3
+	maxFifteen := 15.0
+	minOneDot := 1.0
+	maxTenDot := 10.0
+	maxHundred := 100
+	falseVal := false // For additionalProperties
+
+	return RecipeSchema{
+		Type: "object",
+		Properties: map[string]SchemaProperty{
+			"title": {
+				Type:        "string",
+				Description: "Recipe title (clear and appetizing)",
+				MinLength:   &minOne,
+				MaxLength:   &maxHundred,
+			},
+			"cooking_time": {
+				Type:        "integer",
+				Description: "Total cooking time in minutes",
+				Minimum:     &minOneDot,
+				Maximum:     &maxFifteen,
+			},
+			"ingredients": {
+				Type:        "array",
+				Description: "List of ingredients with quantities",
+				MinItems:    &minOne,
+				Items: &SchemaProperty{
+					Type: "object",
+					Properties: map[string]SchemaProperty{
+						"name":   {Type: "string", Description: "Ingredient name"},
+						"amount": {Type: "string", Description: "Amount (e.g., '2 cups', '300g')"},
+						"notes":  {Type: []string{"string", "null"}, Description: "Optional preparation notes"},
+					},
+					Required:             []string{"name", "amount", "notes"},
+					AdditionalProperties: &falseVal, // Required for Structured Outputs
+				},
+			},
+			"steps": {
+				Type:        "array",
+				Description: "Cooking steps (maximum 3 for lazy cooking)",
+				MinItems:    &minOne,
+				MaxItems:    &maxThree,
+				Items: &SchemaProperty{
+					Type:        "string",
+					Description: "Clear, concise cooking step",
+				},
+			},
+			"tags": {
+				Type:        []string{"array", "null"},
+				Description: "Recipe tags",
+				Items: &SchemaProperty{
+					Type: "string",
+					Enum: []string{"簡単", "10分以内", "15分以内", "ずぼら", "一品", "和食", "洋食", "中華", "その他"},
+				},
+			},
+			"season": {
+				Type:        "string",
+				Description: "Applicable season",
+				Enum:        []string{"spring", "summer", "fall", "winter", "all"},
+			},
+			"laziness_score": {
+				Type:        "number",
+				Description: "Laziness score (10 = easiest)",
+				Minimum:     &minOneDot,
+				Maximum:     &maxTenDot,
+			},
+			"serving_size": {
+				Type:        []string{"integer", "null"},
+				Description: "Number of servings",
+				Minimum:     &minOneDot,
+			},
+			"difficulty": {
+				Type:        []string{"string", "null"},
+				Description: "Difficulty level",
+				Enum:        []string{"easy", "medium", "hard"},
+			},
+			"safety_compliance": {
+				Type:        "object",
+				Description: "Food safety compliance information",
+				Properties: map[string]SchemaProperty{
+					"safe_temp_check": {
+						Type:        "boolean",
+						Description: "Whether safe cooking temperatures are specified",
+					},
+					"temp_instructions": {
+						Type:        "array",
+						Description: "Temperature-specific instructions",
+						Items: &SchemaProperty{
+							Type: "object",
+							Properties: map[string]SchemaProperty{
+								"ingredient":    {Type: "string"},
+								"target_temp_f": {Type: "number"},
+								"instruction":   {Type: "string"},
+							},
+							Required:             []string{"ingredient", "target_temp_f", "instruction"},
+							AdditionalProperties: &falseVal, // Required for nested objects
+						},
+					},
+					"allergen_warnings": {
+						Type:        "array",
+						Description: "Allergen warnings",
+						Items:       &SchemaProperty{Type: "string"},
+					},
+				},
+				Required:             []string{"safe_temp_check", "temp_instructions", "allergen_warnings"},
+				AdditionalProperties: &falseVal, // Required for nested objects
+			},
+		},
+		Required:             []string{"title", "cooking_time", "ingredients", "steps", "tags", "season", "laziness_score", "serving_size", "difficulty", "safety_compliance"},
+		AdditionalProperties: false, // Required for root object
+	}
 }
 
 // Validate validates the recipe data

@@ -54,15 +54,31 @@ func main() {
 	var mealPlanHandler *handlers.MealPlanHandler
 
 	if openaiConfig != nil {
+		// Initialize legacy generator service
 		generatorService, err := services.NewRecipeGeneratorService(openaiConfig)
 		if err != nil {
 			log.Printf("Warning: Failed to initialize recipe generator: %v", err)
 		} else {
-			recipeHandler = handlers.NewRecipeHandler(generatorService)
+			// Initialize enhanced generator service
+			enhancedGeneratorService := services.NewEnhancedRecipeGeneratorService(
+				generatorService.GetClient(),
+				openaiConfig,
+				generatorService.GetRateLimiter(),
+				generatorService.GetCache(),
+			)
+
+			recipeHandler = handlers.NewRecipeHandler(generatorService, enhancedGeneratorService)
 
 			// Initialize meal planner with database and generator
 			mealPlannerService := services.NewMealPlannerService(db, generatorService)
 			mealPlanHandler = handlers.NewMealPlanHandler(mealPlannerService)
+
+			log.Printf("GPT-5 Enhanced Services Initialized:")
+			log.Printf("  - Ideation Model: %s", openaiConfig.IdeationModel)
+			log.Printf("  - Authoring Model: %s", openaiConfig.AuthoringModel)
+			log.Printf("  - Critique Model: %s", openaiConfig.CritiqueModel)
+			log.Printf("  - Structured Outputs: %t", openaiConfig.UseStructuredOutputs)
+			log.Printf("  - Food Safety Strict Mode: %t", openaiConfig.FoodSafetyStrictMode)
 		}
 	}
 
@@ -85,23 +101,43 @@ func main() {
 
 	// Health check endpoint
 	r.GET("/api/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
+		health := gin.H{
 			"status":            "ok",
 			"service":           "lazychef-api",
 			"openai_configured": openaiConfig != nil,
-		})
+		}
+
+		if openaiConfig != nil {
+			health["gpt5_features"] = gin.H{
+				"structured_outputs": openaiConfig.UseStructuredOutputs,
+				"food_safety_mode":   openaiConfig.FoodSafetyStrictMode,
+				"models": gin.H{
+					"ideation":  openaiConfig.IdeationModel,
+					"authoring": openaiConfig.AuthoringModel,
+					"critique":  openaiConfig.CritiqueModel,
+				},
+			}
+		}
+
+		c.JSON(200, health)
 	})
 
 	// Recipe generation endpoints (only if OpenAI is configured)
 	if recipeHandler != nil {
 		api := r.Group("/api/recipes")
 		{
+			// Legacy endpoints
 			api.POST("/generate", recipeHandler.GenerateRecipe)
 			api.POST("/generate-batch", recipeHandler.GenerateBatchRecipes)
 			api.GET("/health", recipeHandler.GetGeneratorHealth)
 			api.POST("/clear-cache", recipeHandler.ClearCache)
 			api.GET("/test", recipeHandler.TestRecipeGeneration)
 			api.GET("/search", recipeHandler.SearchRecipes)
+
+			// Enhanced GPT-5 endpoints
+			api.POST("/generate-enhanced", recipeHandler.GenerateRecipeEnhanced)
+			api.POST("/validate-safety", recipeHandler.ValidateRecipeSafety)
+			api.POST("/validate-quality", recipeHandler.ValidateRecipeQuality)
 		}
 	} else {
 		// Fallback endpoints when OpenAI is not configured
@@ -154,6 +190,9 @@ func main() {
 
 	if recipeHandler != nil {
 		log.Printf("Recipe test: http://localhost:%s/api/recipes/test", port)
+		log.Printf("Enhanced generation: http://localhost:%s/api/recipes/generate-enhanced", port)
+		log.Printf("Safety validation: http://localhost:%s/api/recipes/validate-safety", port)
+		log.Printf("Quality validation: http://localhost:%s/api/recipes/validate-quality", port)
 	}
 
 	if err := r.Run(":" + port); err != nil {
