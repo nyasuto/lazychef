@@ -3,17 +3,24 @@ import type {
   Recipe, 
   GenerateRecipeRequest, 
   RecipeSearchParams, 
-  ApiResponse 
+  ApiResponse,
+  SearchRecipesResponse
 } from '../types';
 
 export const recipeService = {
   // Search recipes
-  async searchRecipes(params: RecipeSearchParams = {}): Promise<Recipe[]> {
+  async searchRecipes(params: RecipeSearchParams = {}): Promise<SearchRecipesResponse> {
     const response = await api.get<ApiResponse<{ recipes: Recipe[]; total: number }>>('/recipes/search', {
       params,
     });
     
-    return response.data.data?.recipes || [];
+    return {
+      success: true,
+      data: {
+        recipes: response.data.data?.recipes || [],
+        total: response.data.data?.total || 0
+      }
+    };
   },
 
   // Generate single recipe
