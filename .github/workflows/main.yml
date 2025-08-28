@@ -1,0 +1,288 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # 並列実行: バックエンドコード品質チェック
+  backend-quality:
+    name: Backend Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 'stable'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-quality-${{ hashFiles('backend/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-quality-
+          ${{ runner.os }}-go-
+          
+    - name: Install dependencies
+      run: |
+        cd backend
+        go mod download
+        
+    - name: Check code formatting
+      run: |
+        cd backend
+        if [ -n "$(gofmt -l .)" ]; then
+          echo "Code is not properly formatted"
+          gofmt -l .
+          exit 1
+        fi
+        
+    - name: Run Go vet
+      run: |
+        cd backend
+        go vet ./...
+        
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v8
+      with:
+        version: latest
+        install-mode: goinstall
+        working-directory: backend
+        args: --timeout=5m ./...
+        
+    - name: Check mod tidy
+      run: |
+        cd backend
+        go mod tidy
+        if ! git diff --quiet go.mod go.sum; then
+          echo "go mod tidy made changes, please run 'go mod tidy' and commit the changes"
+          git diff go.mod go.sum
+          exit 1
+        fi
+
+  # 並列実行: フロントエンド品質チェック
+  frontend-quality:
+    name: Frontend Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 'lts/*'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+        
+    - name: Run ESLint
+      run: |
+        cd frontend
+        npm run lint
+        
+    - name: TypeScript type checking & build
+      run: |
+        cd frontend
+        npm run build
+
+  # 並列実行: バックエンドテスト
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 'stable'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-test-${{ hashFiles('backend/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-test-
+          ${{ runner.os }}-go-
+          
+    - name: Install dependencies
+      run: |
+        cd backend
+        go mod download
+        
+    - name: Run tests with coverage
+      run: |
+        cd backend
+        go test -v -race -coverprofile=coverage.out ./...
+        go tool cover -html=coverage.out -o coverage.html
+        
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v5
+      with:
+        file: ./backend/coverage.out
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  # 並列実行: データベーステスト
+  database-tests:
+    name: Database Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 'stable'
+        
+    - name: Install SQLite
+      run: sudo apt-get update && sudo apt-get install -y sqlite3
+      
+    - name: Test database initialization
+      run: |
+        mkdir -p backend/data
+        make init-db
+        if [ -f backend/data/recipes.db ]; then
+          echo "Database created successfully"
+          sqlite3 backend/data/recipes.db ".tables"
+        else
+          echo "Database not created"
+          exit 1
+        fi
+        
+    - name: Run database-related tests
+      run: |
+        cd backend
+        go test -v ./internal/database/... ./internal/services/...
+
+  # 並列実行: APIテスト
+  api-tests:
+    name: API Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 'stable'
+        
+    - name: Install dependencies
+      run: |
+        cd backend
+        go mod download
+        
+    - name: Start API server
+      run: |
+        cd backend
+        go build -o ../bin/test-server cmd/api/main.go
+        ../bin/test-server &
+        echo $! > server.pid
+        sleep 5
+        
+    - name: Test API endpoints
+      run: |
+        # Test health endpoint
+        curl -f http://localhost:8080/api/health || exit 1
+        
+        # Test recipe search
+        curl -f "http://localhost:8080/api/recipes/search?tag=簡単" || exit 1
+        
+        # Test meal plan creation (expect error due to missing OpenAI key)
+        curl -X POST http://localhost:8080/api/meal-plans/create \
+          -H "Content-Type: application/json" \
+          -d '{"start_date": "2025-01-27", "preferences": {"max_cooking_time": 15}}' \
+          -w "%{http_code}\n" | grep -q "503" || exit 1
+          
+    - name: Stop API server
+      run: |
+        if [ -f backend/server.pid ]; then
+          kill $(cat backend/server.pid) || true
+        fi
+
+  # 並列実行: ビルドテスト
+  build-test:
+    name: Build & Startup Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 'stable'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-build-${{ hashFiles('backend/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-build-
+          ${{ runner.os }}-go-
+          
+    - name: Install dependencies
+      run: |
+        cd backend
+        go mod download
+        
+    - name: Build application
+      run: make build
+      
+    - name: Test application startup
+      run: |
+        cd backend
+        timeout 10s go run cmd/api/main.go || code=$?
+        if [ $code -ne 124 ] && [ $code -ne 0 ]; then
+          echo "Application failed to start properly"
+          exit 1
+        fi
+        echo "Application started successfully"
+
+  # 最終確認: 全ジョブ完了後の統合チェック
+  integration-complete:
+    name: Integration Complete
+    runs-on: ubuntu-latest
+    needs: [backend-quality, frontend-quality, backend-tests, database-tests, api-tests, build-test]
+    
+    steps:
+    - name: All checks passed
+      run: |
+        echo "🎉 All CI/CD checks completed successfully!"
+        echo "✅ Backend Code Quality"
+        echo "✅ Frontend Code Quality" 
+        echo "✅ Backend Tests"
+        echo "✅ Database Tests"
+        echo "✅ API Tests"
+        echo "✅ Build & Startup Test"
+        echo ""
+        echo "Ready for deployment! 🚀"
