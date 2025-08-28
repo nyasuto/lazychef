@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Input from '../common/Input';
 import Button from '../common/Button';
 
@@ -35,11 +35,15 @@ const RecipeSearch: React.FC<RecipeSearchProps> = ({ onSearch, loading = false }
   });
 
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const initialLoadRef = useRef(false);
 
   useEffect(() => {
-    // 初回検索（空の条件で全件取得）
-    onSearch(filters);
-  }, []);
+    // 初回のみ検索（空の条件で全件取得）
+    if (!initialLoadRef.current) {
+      initialLoadRef.current = true;
+      onSearch(filters);
+    }
+  }, [onSearch, filters]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

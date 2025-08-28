@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { Recipe, SearchRecipesResponse } from '../types';
+import { useState, useCallback } from 'react';
+import type { Recipe } from '../types';
 import { recipeService } from '../services/recipeService';
 import type { SearchFilters } from '../components/recipe/RecipeSearch';
 
