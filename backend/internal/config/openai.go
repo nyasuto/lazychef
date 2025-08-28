@@ -18,6 +18,21 @@ type OpenAIConfig struct {
 	RetryDelay              time.Duration
 	RequestsPerMinute       int
 	RecipeGenerationTimeout time.Duration
+
+	// GPT-5 specific settings
+	IdeationModel   string // gpt-5-nano for idea generation
+	AuthoringModel  string // gpt-5 for detailed recipe creation
+	CritiqueModel   string // gpt-5-mini for quality checks
+	ReasoningEffort string // "minimal", "low", "medium", "high"
+	Verbosity       string // "minimal", "low", "medium", "high"
+
+	// Structured Outputs
+	UseStructuredOutputs bool // Enable strict JSON schema validation
+	MaxCompletionTokens  int  // Limit completion tokens for cost control
+
+	// Food Safety & Quality
+	FoodSafetyStrictMode bool // Enable strict food safety checks
+	USDATemperatureCheck bool // Enable USDA temperature validation
 }
 
 // LoadOpenAIConfig loads OpenAI configuration from environment variables
@@ -37,6 +52,21 @@ func LoadOpenAIConfig() (*OpenAIConfig, error) {
 		RetryDelay:              getEnvAsDurationOrDefault("OPENAI_RETRY_DELAY", 2*time.Second),
 		RequestsPerMinute:       getEnvAsIntOrDefault("OPENAI_REQUESTS_PER_MINUTE", 60),
 		RecipeGenerationTimeout: getEnvAsDurationOrDefault("RECIPE_GENERATION_TIMEOUT", 30*time.Second),
+
+		// GPT-5 specific settings
+		IdeationModel:   getEnvOrDefault("OPENAI_IDEATION_MODEL", "gpt-5-nano"),
+		AuthoringModel:  getEnvOrDefault("OPENAI_AUTHORING_MODEL", "gpt-5"),
+		CritiqueModel:   getEnvOrDefault("OPENAI_CRITIQUE_MODEL", "gpt-5-mini"),
+		ReasoningEffort: getEnvOrDefault("OPENAI_REASONING_EFFORT", "low"),
+		Verbosity:       getEnvOrDefault("OPENAI_VERBOSITY", "minimal"),
+
+		// Structured Outputs
+		UseStructuredOutputs: getEnvOrDefault("OPENAI_USE_STRUCTURED_OUTPUTS", "true") == "true",
+		MaxCompletionTokens:  getEnvAsIntOrDefault("OPENAI_MAX_COMPLETION_TOKENS", 800),
+
+		// Food Safety & Quality
+		FoodSafetyStrictMode: getEnvOrDefault("FOOD_SAFETY_STRICT_MODE", "true") == "true",
+		USDATemperatureCheck: getEnvOrDefault("USDA_TEMP_CHECK_ENABLED", "true") == "true",
 	}
 
 	// Validate configuration

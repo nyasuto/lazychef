@@ -12,13 +12,15 @@ import (
 
 // RecipeHandler handles recipe-related HTTP requests
 type RecipeHandler struct {
-	generatorService *services.RecipeGeneratorService
+	generatorService         *services.RecipeGeneratorService
+	enhancedGeneratorService *services.EnhancedRecipeGeneratorService
 }
 
 // NewRecipeHandler creates a new recipe handler
-func NewRecipeHandler(generatorService *services.RecipeGeneratorService) *RecipeHandler {
+func NewRecipeHandler(generatorService *services.RecipeGeneratorService, enhancedGeneratorService *services.EnhancedRecipeGeneratorService) *RecipeHandler {
 	return &RecipeHandler{
-		generatorService: generatorService,
+		generatorService:         generatorService,
+		enhancedGeneratorService: enhancedGeneratorService,
 	}
 }
 
@@ -55,6 +57,132 @@ func (h *RecipeHandler) GenerateRecipe(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"recipe":   result.Recipe,
 		"metadata": result.Metadata,
+	})
+}
+
+// GenerateRecipeEnhanced generates a recipe using GPT-5 with enhanced validation
+func (h *RecipeHandler) GenerateRecipeEnhanced(c *gin.Context) {
+	var req services.EnhancedGenerationRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Set default stage if not specified
+	if req.Stage == "" {
+		req.Stage = services.StageAuthoring
+	}
+
+	// Set default reasoning effort and verbosity if not specified
+	if req.ReasoningEffort == "" {
+		req.ReasoningEffort = h.enhancedGeneratorService.GetConfig().ReasoningEffort
+	}
+	if req.Verbosity == "" {
+		req.Verbosity = h.enhancedGeneratorService.GetConfig().Verbosity
+	}
+
+	// Generate recipe using enhanced service
+	result, err := h.enhancedGeneratorService.GenerateRecipeEnhanced(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to generate enhanced recipe",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if result.Error != "" {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Enhanced recipe generation error",
+			"details": result.Error,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"recipe":             result.Recipe,
+		"metadata":           result.Metadata,
+		"stage":              result.Stage,
+		"model_used":         result.ModelUsed,
+		"reasoning_effort":   result.ReasoningEffort,
+		"verbosity":          result.Verbosity,
+		"structured_outputs": result.StructuredOutputs,
+		"safety_check":       result.SafetyCheckResult,
+		"quality_check":      result.QualityCheckResult,
+	})
+}
+
+// ValidateRecipeSafety validates a recipe for food safety compliance
+func (h *RecipeHandler) ValidateRecipeSafety(c *gin.Context) {
+	var recipe models.RecipeData
+
+	if err := c.ShouldBindJSON(&recipe); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid recipe format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Create a temporary enhanced service if needed
+	if h.enhancedGeneratorService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Enhanced generator service not available",
+		})
+		return
+	}
+
+	// Validate using food safety validator
+	safetyResult, err := h.enhancedGeneratorService.GetFoodSafetyValidator().ValidateRecipe(&recipe)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Safety validation failed",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"safety_result": safetyResult,
+	})
+}
+
+// ValidateRecipeQuality validates a recipe for quality compliance
+func (h *RecipeHandler) ValidateRecipeQuality(c *gin.Context) {
+	var recipe models.RecipeData
+
+	if err := c.ShouldBindJSON(&recipe); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid recipe format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Create a temporary enhanced service if needed
+	if h.enhancedGeneratorService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Enhanced generator service not available",
+		})
+		return
+	}
+
+	// Validate using quality validator
+	qualityResult, err := h.enhancedGeneratorService.GetQualityValidator().ValidateRecipe(&recipe)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Quality validation failed",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"quality_result": qualityResult,
 	})
 }
 
