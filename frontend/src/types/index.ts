@@ -82,6 +82,14 @@ export interface RecipeSearchParams {
   offset?: number;
 }
 
+export interface SearchRecipesResponse {
+  success: boolean;
+  data: {
+    recipes: Recipe[];
+    total: number;
+  };
+}
+
 // UI State Types
 export interface LoadingState {
   isLoading: boolean;
