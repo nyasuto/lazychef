@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Development files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build files
+bin/
+dist/
+build/
+
+# Test files
+*_test.go
+test/
+coverage.out
+*.test
+
+# Database files (will be mounted as volume)
+data/*.db
+data/*.db-journal
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# Dependencies (will be installed in container)
+vendor/
