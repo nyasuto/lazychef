@@ -62,4 +62,44 @@ api.interceptors.response.use(
   }
 );
 
+// Import types
+import type { 
+  Recipe, 
+  SearchRecipesResponse, 
+  RecipeSearchParams,
+  MealPlan,
+  CreateMealPlanRequest,
+  GenerateRecipeRequest 
+} from '../types';
+
+// API Functions
+
+// Recipe APIs
+export const searchRecipes = async (params: RecipeSearchParams): Promise<SearchRecipesResponse> => {
+  const response = await api.get('/recipes/search', { params });
+  return response.data;
+};
+
+export const generateRecipe = async (request: GenerateRecipeRequest): Promise<Recipe> => {
+  const response = await api.post('/recipes/generate', request);
+  return response.data.recipe;
+};
+
+export const generateRecipes = async (request: GenerateRecipeRequest & { count: number }): Promise<Recipe[]> => {
+  const response = await api.post('/recipes/generate-batch', request);
+  return response.data.recipes;
+};
+
+// Meal Plan APIs
+export const createMealPlan = async (request: CreateMealPlanRequest): Promise<MealPlan> => {
+  const response = await api.post('/meal-plans/create', request);
+  return response.data.meal_plan;
+};
+
+// Health check
+export const healthCheck = async (): Promise<{ status: string }> => {
+  const response = await api.get('/health');
+  return response.data;
+};
+
 export default api;
