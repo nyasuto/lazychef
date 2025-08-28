@@ -45,6 +45,26 @@ curl localhost:8080/api/health   # Health check
 - **Branch naming**: `feat/issue-X-description`, `fix/issue-X-description`
 - **All GitHub issues and PRs must be in Japanese**
 
+## Issue Management Process
+**CRITICAL: 守るべきプロセス**
+
+1. **Issue解決の正しい順序:**
+   - ✅ 実装完了
+   - ✅ 品質チェック (`make quality`)
+   - ✅ PR作成 (`gh pr create`)
+   - ✅ **PR先行 - マージ待ち**
+   - ✅ 人間がPRレビュー・マージ
+   - ✅ **マージ後にIssueクローズ**
+
+2. **❌ 避けるべき行動:**
+   - **PRマージ前のIssueクローズ** - 順序が逆
+   - **実装中のIssueクローズ** - 作業未完了
+   - **PR作成前のIssueクローズ** - レビューなし
+
+3. **✅ 正しいタイミング:**
+   - Issue実装 → PR作成 → 人間レビュー → マージ → **その後** Issue クローズ
+   - 緊急修正の場合のみ例外検討
+
 ## API Endpoints
 ```
 POST /api/recipes/generate        # Generate single recipe
