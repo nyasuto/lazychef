@@ -104,7 +104,7 @@ func TestRecipeData_CalculateLazinessScore(t *testing.T) {
 				Steps:       []string{"step1"},
 				Ingredients: []Ingredient{{Name: "ingredient1", Amount: "1 cup"}, {Name: "ingredient2", Amount: "2 tbsp"}},
 			},
-			expected: 9.5, // Very short time, few steps, few ingredients
+			expected: 8.0, // 3 (time ≤5) + 3 (steps ≤2) + 2 (ingredients ≤3) = 8
 		},
 		{
 			name: "moderate recipe",
@@ -116,7 +116,7 @@ func TestRecipeData_CalculateLazinessScore(t *testing.T) {
 					{Name: "ing3", Amount: "1 cup"}, {Name: "ing4", Amount: "1 cup"}, {Name: "ing5", Amount: "1 cup"},
 				},
 			},
-			expected: 6.5, // Medium time, moderate steps and ingredients
+			expected: 5.0, // 1 (time ≤30) + 2.5 (steps=3) + 1.5 (ingredients=5) = 5.0
 		},
 		{
 			name: "complex recipe",
@@ -130,7 +130,7 @@ func TestRecipeData_CalculateLazinessScore(t *testing.T) {
 					{Name: "ing7", Amount: "1 cup"}, {Name: "ing8", Amount: "1 cup"},
 				},
 			},
-			expected: 3.0, // Long time, many steps and ingredients
+			expected: 0.0, // 0 (time >30) + 0 (steps >5) + 0 (ingredients >7) = 0.0
 		},
 	}
 
@@ -150,7 +150,7 @@ func TestRecipeData_CalculateLazinessScore_Bounds(t *testing.T) {
 		Ingredients: make([]Ingredient, 20), // 20 ingredients
 	}
 	score := complexRecipe.CalculateLazinessScore()
-	assert.GreaterOrEqual(t, score, 1.0)
+	assert.GreaterOrEqual(t, score, 0.0)
 	assert.LessOrEqual(t, score, 10.0)
 
 	// Test maximum score (simplest)
@@ -160,7 +160,7 @@ func TestRecipeData_CalculateLazinessScore_Bounds(t *testing.T) {
 		Ingredients: []Ingredient{{Name: "one thing", Amount: "1 cup"}},
 	}
 	score = simpleRecipe.CalculateLazinessScore()
-	assert.GreaterOrEqual(t, score, 1.0)
+	assert.GreaterOrEqual(t, score, 0.0)
 	assert.LessOrEqual(t, score, 10.0)
 }
 

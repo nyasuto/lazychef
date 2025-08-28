@@ -109,8 +109,18 @@ func TestMealPlanData_Validate(t *testing.T) {
 				DailyRecipes: map[string]DailyRecipe{
 					"Monday": {
 						RecipeID: 1,
-						Title:    "Test Recipe",
+						Title:    "Test Recipe 1",
 						Day:      "Monday",
+					},
+					"Tuesday": {
+						RecipeID: 2,
+						Title:    "Test Recipe 2",
+						Day:      "Tuesday",
+					},
+					"Wednesday": {
+						RecipeID: 3,
+						Title:    "Test Recipe 3",
+						Day:      "Wednesday",
 					},
 				},
 				ShoppingList: []ShoppingItem{

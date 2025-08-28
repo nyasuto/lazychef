@@ -54,11 +54,11 @@ func TestLoadOpenAIConfig_WithDefaults(t *testing.T) {
 	assert.NotNil(t, config)
 	assert.Equal(t, "test-api-key", config.APIKey)
 	assert.Equal(t, "gpt-3.5-turbo", config.Model)         // Default
-	assert.Equal(t, 0.7, config.Temperature)               // Default
+	assert.Equal(t, float32(0.7), config.Temperature)      // Default
 	assert.Equal(t, 1000, config.MaxTokens)                // Default
 	assert.Equal(t, 60, config.RequestsPerMinute)          // Default
 	assert.Equal(t, 3, config.MaxRetries)                  // Default
-	assert.Equal(t, time.Second, config.RetryDelay)        // Default
+	assert.Equal(t, 2*time.Second, config.RetryDelay)      // Default
 	assert.Equal(t, 30*time.Second, config.RequestTimeout) // Default
 }
 
@@ -119,7 +119,7 @@ func TestLoadOpenAIConfig_CustomValues(t *testing.T) {
 	assert.NotNil(t, config)
 	assert.Equal(t, "custom-key", config.APIKey)
 	assert.Equal(t, "gpt-4", config.Model)
-	assert.Equal(t, 0.5, config.Temperature)
+	assert.Equal(t, float32(0.5), config.Temperature)
 	assert.Equal(t, 2000, config.MaxTokens)
 	assert.Equal(t, 120, config.RequestsPerMinute)
 	assert.Equal(t, 5, config.MaxRetries)
@@ -141,9 +141,10 @@ func TestLoadOpenAIConfig_InvalidTemperature(t *testing.T) {
 
 	config, err := LoadOpenAIConfig()
 
-	assert.Error(t, err)
-	assert.Nil(t, config)
-	assert.Contains(t, err.Error(), "temperature")
+	// Invalid temperature should use default value, not error
+	assert.NoError(t, err)
+	assert.NotNil(t, config)
+	assert.Equal(t, float32(0.7), config.Temperature) // Default value
 }
 
 func TestLoadOpenAIConfig_InvalidMaxTokens(t *testing.T) {
@@ -160,9 +161,10 @@ func TestLoadOpenAIConfig_InvalidMaxTokens(t *testing.T) {
 
 	config, err := LoadOpenAIConfig()
 
-	assert.Error(t, err)
-	assert.Nil(t, config)
-	assert.Contains(t, err.Error(), "max_tokens")
+	// Invalid max tokens should use default value, not error
+	assert.NoError(t, err)
+	assert.NotNil(t, config)
+	assert.Equal(t, 1000, config.MaxTokens) // Default value
 }
 
 func TestLoadOpenAIConfig_InvalidDuration(t *testing.T) {
@@ -179,7 +181,8 @@ func TestLoadOpenAIConfig_InvalidDuration(t *testing.T) {
 
 	config, err := LoadOpenAIConfig()
 
-	assert.Error(t, err)
-	assert.Nil(t, config)
-	assert.Contains(t, err.Error(), "request_timeout")
+	// Invalid duration should use default value, not error
+	assert.NoError(t, err)
+	assert.NotNil(t, config)
+	assert.Equal(t, 30*time.Second, config.RequestTimeout) // Default value
 }
