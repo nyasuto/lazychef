@@ -45,7 +45,7 @@ export const recipeService = {
   },
 
   // Test recipe generation (for debugging)
-  async testRecipeGeneration(): Promise<any> {
+  async testRecipeGeneration(): Promise<unknown> {
     const response = await api.get('/recipes/test');
     return response.data;
   },

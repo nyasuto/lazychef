@@ -1,4 +1,4 @@
-.PHONY: build run test clean setup dev deps lint fmt quality help
+.PHONY: build run test clean setup dev deps lint fmt quality help frontend-lint frontend-build
 
 # Go parameters
 GOCMD=go
@@ -78,8 +78,26 @@ fmt:
 	@echo "Formatting code..."
 	cd backend && $(GOCMD) fmt ./...
 
-## quality: Run all quality checks (format, lint, test)
-quality: fmt lint test
+## frontend-lint: Run frontend linting
+frontend-lint:
+	@echo "Running frontend linting..."
+	@if [ -d "frontend" ]; then \
+		cd frontend && npm run lint; \
+	else \
+		echo "Frontend directory not found, skipping frontend lint"; \
+	fi
+
+## frontend-build: Build frontend for production
+frontend-build:
+	@echo "Building frontend..."
+	@if [ -d "frontend" ]; then \
+		cd frontend && npm run build; \
+	else \
+		echo "Frontend directory not found, skipping frontend build"; \
+	fi
+
+## quality: Run all quality checks (format, lint, test, frontend)
+quality: fmt lint test frontend-lint frontend-build
 	@echo "All quality checks completed successfully!"
 
 ## init-db: Initialize SQLite database
