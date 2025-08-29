@@ -73,10 +73,10 @@ func (h *RecipeHandler) GenerateRecipe(c *gin.Context) {
 		// Log the error but don't fail the request - recipe generation was successful
 		// In a production system, you might want to queue this for retry
 		c.JSON(http.StatusOK, gin.H{
-			"recipe":         result.Recipe,
-			"metadata":       result.Metadata,
-			"save_warning":   "Recipe generated but failed to save to database",
-			"save_error":     err.Error(),
+			"recipe":       result.Recipe,
+			"metadata":     result.Metadata,
+			"save_warning": "Recipe generated but failed to save to database",
+			"save_error":   err.Error(),
 		})
 		return
 	}
