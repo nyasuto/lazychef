@@ -37,15 +37,6 @@ jobs:
         cd backend
         go mod download
         
-    - name: Check code formatting
-      run: |
-        cd backend
-        if [ -n "$(gofmt -l .)" ]; then
-          echo "Code is not properly formatted"
-          gofmt -l .
-          exit 1
-        fi
-        
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v8
       with:

@@ -105,12 +105,16 @@ func main() {
 			// Diversity service (Issue #65)
 			diversityService := services.NewDiversityService(db, generatorService)
 
+			// Auto generation service (Issue #76 - Phase 1)
+			autoGenerationService := services.NewAutoGenerationService(db, diversityService)
+
 			// Admin handler for new APIs
 			adminHandler = handlers.NewAdminHandler(
 				batchService,
 				embeddingService,
 				tokenRateLimiter,
 				diversityService,
+				autoGenerationService,
 			)
 
 			log.Printf("GPT-5 Enhanced Services Initialized:")
@@ -124,6 +128,7 @@ func main() {
 			log.Printf("  - Batch API Service: enabled")
 			log.Printf("  - Embedding Deduplicator: enabled")
 			log.Printf("  - Token Rate Limiter: enabled")
+			log.Printf("  - Auto Generation Service: enabled")
 			log.Printf("  - Batch Storage Path: %s", batchStoragePath)
 		}
 	}
@@ -271,6 +276,13 @@ func main() {
 				diversityAPI.POST("/dimension-weights", adminHandler.UpdateDimensionWeights)
 			}
 
+			// Auto generation endpoints (Issue #76 - Phase 1)
+			autoGenAPI := adminAPI.Group("/auto-generation")
+			{
+				autoGenAPI.GET("/coverage", adminHandler.GetCoverageAnalysis)
+				autoGenAPI.POST("/generate", adminHandler.GenerateAutoRecipes)
+			}
+
 			// System health
 			adminAPI.GET("/health", adminHandler.GetSystemHealth)
 		}
@@ -300,6 +312,8 @@ func main() {
 		log.Printf("  - Token metrics: http://localhost:%s/api/admin/metrics/token-usage", port)
 		log.Printf("  - Diversity coverage: http://localhost:%s/api/admin/diversity/coverage", port)
 		log.Printf("  - Diversity generate: http://localhost:%s/api/admin/diversity/generate", port)
+		log.Printf("  - Auto generation coverage: http://localhost:%s/api/admin/auto-generation/coverage", port)
+		log.Printf("  - Auto generation: http://localhost:%s/api/admin/auto-generation/generate", port)
 		log.Printf("  - Admin health: http://localhost:%s/api/admin/health", port)
 	}
 
