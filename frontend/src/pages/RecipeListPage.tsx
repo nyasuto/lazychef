@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import RecipeSearch from '../components/recipe/RecipeSearch';
 import RecipeCard from '../components/recipe/RecipeCard';
+import RecipeDetailModal from '../components/recipe/RecipeDetailModal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useRecipes } from '../hooks/useRecipes';
 import type { Recipe } from '../types';
@@ -16,6 +17,10 @@ const RecipeListPage: React.FC = () => {
     maxCookingTime: null,
     minLazinessScore: null,
   });
+
+  // モーダル状態管理
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const recipesPerPage = 12;
   const totalPages = Math.ceil(total / recipesPerPage);
@@ -33,7 +38,14 @@ const RecipeListPage: React.FC = () => {
 
   const handleRecipeClick = (recipe: Recipe) => {
     console.log('Recipe clicked:', recipe);
-    // Phase 3でレシピ詳細ページに遷移する機能を実装予定
+    setSelectedRecipe(recipe);
+    setIsModalOpen(true);
+  };
+
+  // モーダルクローズ
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setSelectedRecipe(null);
   };
 
   const hasActiveFilters = 
@@ -181,6 +193,13 @@ const RecipeListPage: React.FC = () => {
           )}
         </>
       )}
+
+      {/* レシピ詳細モーダル */}
+      <RecipeDetailModal
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        recipe={selectedRecipe}
+      />
     </div>
   );
 };
