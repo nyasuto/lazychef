@@ -50,3 +50,17 @@ var (
 	ErrInvalidDifficulty = errors.New("invalid difficulty, must be easy, medium, or hard")
 	ErrInvalidSkillLevel = errors.New("invalid skill level, must be beginner, intermediate, or advanced")
 )
+
+// Diversity system errors
+var (
+	ErrInvalidProfileName      = errors.New("invalid profile name")
+	ErrInvalidBatchSize        = errors.New("invalid batch size, must be between 1 and 50")
+	ErrInvalidStrategy         = errors.New("invalid generation strategy")
+	ErrInvalidSimilarity       = errors.New("invalid similarity threshold, must be between 0.0 and 1.0")
+	ErrInvalidQualityThreshold = errors.New("invalid quality threshold, must be between 1.0 and 10.0")
+	ErrInvalidDimension        = errors.New("invalid dimension")
+	ErrDimensionNotFound       = errors.New("dimension not found")
+	ErrProfileNotFound         = errors.New("generation profile not found")
+	ErrInvalidWeight           = errors.New("invalid dimension weight")
+	ErrCoverageNotFound        = errors.New("coverage data not found")
+)

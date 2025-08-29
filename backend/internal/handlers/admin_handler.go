@@ -16,14 +16,16 @@ type AdminHandler struct {
 	batchService     *services.BatchGenerationService
 	embeddingService *services.EmbeddingDeduplicator
 	tokenRateLimiter *services.TokenRateLimiter
+	diversityService *services.DiversityService
 }
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(batchService *services.BatchGenerationService, embeddingService *services.EmbeddingDeduplicator, tokenRateLimiter *services.TokenRateLimiter) *AdminHandler {
+func NewAdminHandler(batchService *services.BatchGenerationService, embeddingService *services.EmbeddingDeduplicator, tokenRateLimiter *services.TokenRateLimiter, diversityService *services.DiversityService) *AdminHandler {
 	return &AdminHandler{
 		batchService:     batchService,
 		embeddingService: embeddingService,
 		tokenRateLimiter: tokenRateLimiter,
+		diversityService: diversityService,
 	}
 }
 
@@ -444,6 +446,7 @@ func (h *AdminHandler) GetSystemHealth(c *gin.Context) {
 			"batch_generation":   h.batchService != nil,
 			"embedding_service":  h.embeddingService != nil,
 			"token_rate_limiter": h.tokenRateLimiter != nil,
+			"diversity_service":  h.diversityService != nil,
 		},
 	}
 
@@ -460,5 +463,183 @@ func (h *AdminHandler) GetSystemHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    health,
+	})
+}
+
+// Diversity System Endpoints (Issue #65)
+
+// GetRecipeCoverage handles GET /api/admin/recipe-coverage
+func (h *AdminHandler) GetRecipeCoverage(c *gin.Context) {
+	if h.diversityService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "Diversity service not available",
+		})
+		return
+	}
+
+	analysis, err := h.diversityService.AnalyzeCoverage()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to analyze recipe coverage",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    analysis,
+	})
+}
+
+// GenerateDiverseRecipes handles POST /api/admin/generate-diverse
+func (h *AdminHandler) GenerateDiverseRecipes(c *gin.Context) {
+	if h.diversityService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "Diversity service not available",
+		})
+		return
+	}
+
+	var req models.DiverseGenerationRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Validate request
+	if err := req.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Request validation failed",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Generate diverse recipes
+	response, err := h.diversityService.GenerateDiverseRecipes(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to generate diverse recipes",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    response,
+	})
+}
+
+// GetDiversityMetrics handles GET /api/admin/diversity-metrics
+func (h *AdminHandler) GetDiversityMetrics(c *gin.Context) {
+	if h.diversityService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "Diversity service not available",
+		})
+		return
+	}
+
+	// Get optional limit parameter
+	limitStr := c.DefaultQuery("limit", "20")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	// Analyze coverage
+	analysis, err := h.diversityService.AnalyzeCoverage()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to get diversity metrics",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Limit low coverage combinations if requested
+	if len(analysis.LowCoverageCombos) > limit {
+		analysis.LowCoverageCombos = analysis.LowCoverageCombos[:limit]
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    analysis,
+		"meta": gin.H{
+			"limit":              limit,
+			"total_combos":       analysis.TotalCombinations,
+			"covered_combos":     analysis.CoveredCombinations,
+			"coverage_rate":      analysis.CoverageRate,
+			"low_coverage_count": len(analysis.LowCoverageCombos),
+		},
+	})
+}
+
+// UpdateDimensionWeights handles POST /api/admin/dimension-weights
+func (h *AdminHandler) UpdateDimensionWeights(c *gin.Context) {
+	var req struct {
+		DimensionType  string  `json:"dimension_type" binding:"required"`
+		DimensionValue string  `json:"dimension_value" binding:"required"`
+		Weight         float64 `json:"weight" binding:"required,min=0"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// TODO: Implement dimension weight update in Phase 3
+	// This would update the weight in the recipe_dimensions table
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Dimension weight update functionality will be implemented in Phase 3",
+		"data": gin.H{
+			"dimension_type":  req.DimensionType,
+			"dimension_value": req.DimensionValue,
+			"new_weight":      req.Weight,
+		},
+	})
+}
+
+// InitializeDiversitySystem handles POST /api/admin/initialize-diversity
+func (h *AdminHandler) InitializeDiversitySystem(c *gin.Context) {
+	if h.diversityService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "Diversity service not available",
+		})
+		return
+	}
+
+	if err := h.diversityService.InitializeSystem(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to initialize diversity system",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Diversity system initialized successfully",
 	})
 }
