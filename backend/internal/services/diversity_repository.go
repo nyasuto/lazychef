@@ -230,13 +230,14 @@ func (r *DiversityRepository) GetGenerationProfile(name string) (*models.Generat
 	`
 
 	var profile models.GenerationProfile
+	var configStr, perfDataStr string
 	row := r.db.QueryRow(query, name)
 
 	if err := row.Scan(
 		&profile.ID,
 		&profile.ProfileName,
-		&profile.Config,
-		&profile.PerformanceData,
+		&configStr,
+		&perfDataStr,
 		&profile.IsActive,
 		&profile.CreatedAt,
 		&profile.UpdatedAt,
@@ -246,6 +247,10 @@ func (r *DiversityRepository) GetGenerationProfile(name string) (*models.Generat
 		}
 		return nil, fmt.Errorf("failed to query generation profile: %w", err)
 	}
+
+	// Convert strings to json.RawMessage
+	profile.Config = json.RawMessage(configStr)
+	profile.PerformanceData = json.RawMessage(perfDataStr)
 
 	return &profile, nil
 }
