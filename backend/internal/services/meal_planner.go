@@ -192,10 +192,10 @@ func (s *MealPlannerService) getFallbackRecipe(index int) *models.RecipeData {
 
 // saveMealPlan saves a meal plan to the database
 func (s *MealPlannerService) saveMealPlan(plan *models.MealPlan) error {
-	// Convert to JSON for storage
-	data, err := json.Marshal(plan)
+	// Convert meal plan data to JSON for storage
+	weekDataJSON, err := json.Marshal(plan.WeekData)
 	if err != nil {
-		return fmt.Errorf("failed to marshal meal plan: %w", err)
+		return fmt.Errorf("failed to marshal meal plan data: %w", err)
 	}
 
 	query := `
@@ -203,49 +203,112 @@ func (s *MealPlannerService) saveMealPlan(plan *models.MealPlan) error {
 		VALUES (?)
 	`
 
-	// TODO: Execute query with database connection
-	_ = query
-	_ = data
+	// Execute the database query
+	if err := s.db.Execute(query, string(weekDataJSON)); err != nil {
+		return fmt.Errorf("failed to execute meal plan insert: %w", err)
+	}
+
+	// Get the last inserted ID
+	id, err := s.db.GetLastInsertID()
+	if err != nil {
+		return fmt.Errorf("failed to get last insert ID: %w", err)
+	}
+
+	// Set the ID on the plan object
+	plan.ID = int(id)
 
 	return nil
 }
 
 // GetMealPlan retrieves a meal plan by ID
 func (s *MealPlannerService) GetMealPlan(id int) (*models.MealPlan, error) {
-	// For now, return a mock meal plan to avoid staticcheck issues
-	// TODO: Implement actual database query
+	query := `
+		SELECT id, week_data, created_at
+		FROM meal_plans
+		WHERE id = ?
+	`
 
-	mockPlan := &models.MealPlan{
-		ID: id,
-		WeekData: models.MealPlanData{
-			StartDate:         "2025-01-27",
-			ShoppingList:      []models.ShoppingItem{},
-			DailyRecipes:      make(map[string]models.DailyRecipe),
-			TotalCostEstimate: 1500,
-		},
+	rows, err := s.db.Query(query, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query meal plan: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			// In a real application, we would log this error
+			_ = closeErr
+		}
+	}()
+
+	if !rows.Next() {
+		return nil, fmt.Errorf("meal plan with id %d not found", id)
 	}
 
-	return mockPlan, nil
+	var mealPlan models.MealPlan
+	var weekDataJSON string
+	var createdAt string
+
+	if err := rows.Scan(&mealPlan.ID, &weekDataJSON, &createdAt); err != nil {
+		return nil, fmt.Errorf("failed to scan meal plan: %w", err)
+	}
+
+	// Parse JSON data
+	if err := json.Unmarshal([]byte(weekDataJSON), &mealPlan.WeekData); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal meal plan data: %w", err)
+	}
+
+	return &mealPlan, nil
 }
 
 // ListMealPlans lists meal plans with pagination
 func (s *MealPlannerService) ListMealPlans(limit, offset int) ([]*models.MealPlan, error) {
-	// For now, return mock meal plans to avoid staticcheck issues
-	// TODO: Implement actual database query
-
-	mockPlans := make([]*models.MealPlan, 0, limit)
-	for i := 0; i < limit && i < 3; i++ { // Return up to 3 mock plans
-		plan := &models.MealPlan{
-			ID: i + 1,
-			WeekData: models.MealPlanData{
-				StartDate:         "2025-01-27",
-				ShoppingList:      []models.ShoppingItem{},
-				DailyRecipes:      make(map[string]models.DailyRecipe),
-				TotalCostEstimate: 1500 + (i * 200),
-			},
-		}
-		mockPlans = append(mockPlans, plan)
+	// Set reasonable limits
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
 	}
 
-	return mockPlans, nil
+	query := `
+		SELECT id, week_data, created_at
+		FROM meal_plans
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`
+
+	rows, err := s.db.Query(query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query meal plans: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			// In a real application, we would log this error
+			_ = closeErr
+		}
+	}()
+
+	plans := make([]*models.MealPlan, 0, limit)
+
+	for rows.Next() {
+		var mealPlan models.MealPlan
+		var weekDataJSON string
+		var createdAt string
+
+		if err := rows.Scan(&mealPlan.ID, &weekDataJSON, &createdAt); err != nil {
+			return nil, fmt.Errorf("failed to scan meal plan: %w", err)
+		}
+
+		// Parse JSON data
+		if err := json.Unmarshal([]byte(weekDataJSON), &mealPlan.WeekData); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal meal plan data: %w", err)
+		}
+
+		plans = append(plans, &mealPlan)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during row iteration: %w", err)
+	}
+
+	return plans, nil
 }
