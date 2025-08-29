@@ -9,15 +9,17 @@ import (
 
 // MealPlannerService handles meal plan creation and management
 type MealPlannerService struct {
-	db        *database.Database
-	generator *RecipeGeneratorService
+	db                   *database.Database
+	generator            *RecipeGeneratorService
+	ingredientAggregator *IngredientAggregator
 }
 
 // NewMealPlannerService creates a new meal planner service
 func NewMealPlannerService(db *database.Database, generator *RecipeGeneratorService) *MealPlannerService {
 	return &MealPlannerService{
-		db:        db,
-		generator: generator,
+		db:                   db,
+		generator:            generator,
+		ingredientAggregator: NewIngredientAggregator(),
 	}
 }
 
@@ -72,26 +74,40 @@ func (s *MealPlannerService) CreateWeeklyPlan(req models.CreateMealPlanRequest) 
 
 // createShoppingList creates a shopping list from recipes
 func (s *MealPlannerService) createShoppingList(recipes []models.RecipeData) []models.ShoppingItem {
-	itemMap := make(map[string]string)
+	// Map to collect quantities for each ingredient
+	ingredientQuantitiesMap := make(map[string][]*IngredientQuantity)
 
+	// Collect all ingredient quantities
 	for _, recipe := range recipes {
 		for _, ingredient := range recipe.Ingredients {
-			// Aggregate same ingredients
-			if _, exists := itemMap[ingredient.Name]; exists {
-				// TODO: Properly aggregate amounts
-				itemMap[ingredient.Name] = "適量"
-			} else {
-				itemMap[ingredient.Name] = ingredient.Amount
+			qty, err := s.ingredientAggregator.ParseQuantity(ingredient.Amount)
+			if err != nil {
+				// If parsing fails, use "適量"
+				qty = &IngredientQuantity{Amount: 0, Unit: "適量"}
 			}
+
+			ingredientQuantitiesMap[ingredient.Name] = append(
+				ingredientQuantitiesMap[ingredient.Name],
+				qty,
+			)
 		}
 	}
 
-	// Convert to shopping list
-	shoppingList := make([]models.ShoppingItem, 0, len(itemMap))
-	for name, amount := range itemMap {
+	// Aggregate quantities for each ingredient
+	shoppingList := make([]models.ShoppingItem, 0, len(ingredientQuantitiesMap))
+	for ingredientName, quantities := range ingredientQuantitiesMap {
+		aggregatedQty, err := s.ingredientAggregator.AggregateQuantities(quantities)
+		if err != nil {
+			// If aggregation fails, use "適量"
+			aggregatedQty = &IngredientQuantity{Amount: 0, Unit: "適量"}
+		}
+
+		// Format the aggregated quantity
+		amountStr := s.ingredientAggregator.FormatQuantity(aggregatedQty)
+
 		shoppingList = append(shoppingList, models.ShoppingItem{
-			Item:   name,
-			Amount: amount,
+			Item:   ingredientName,
+			Amount: amountStr,
 		})
 	}
 
