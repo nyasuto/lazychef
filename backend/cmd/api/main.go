@@ -68,7 +68,7 @@ func main() {
 				generatorService.GetCache(),
 			)
 
-			recipeHandler = handlers.NewRecipeHandler(generatorService, enhancedGeneratorService)
+			recipeHandler = handlers.NewRecipeHandler(db, generatorService, enhancedGeneratorService)
 
 			// Initialize meal planner with database and generator
 			mealPlannerService := services.NewMealPlannerService(db, generatorService)

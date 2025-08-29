@@ -1,24 +1,28 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 
+	"lazychef/internal/database"
 	"lazychef/internal/models"
 	"lazychef/internal/services"
 )
 
 // RecipeHandler handles recipe-related HTTP requests
 type RecipeHandler struct {
+	db                       *database.Database
 	generatorService         *services.RecipeGeneratorService
 	enhancedGeneratorService *services.EnhancedRecipeGeneratorService
 }
 
 // NewRecipeHandler creates a new recipe handler
-func NewRecipeHandler(generatorService *services.RecipeGeneratorService, enhancedGeneratorService *services.EnhancedRecipeGeneratorService) *RecipeHandler {
+func NewRecipeHandler(db *database.Database, generatorService *services.RecipeGeneratorService, enhancedGeneratorService *services.EnhancedRecipeGeneratorService) *RecipeHandler {
 	return &RecipeHandler{
+		db:                       db,
 		generatorService:         generatorService,
 		enhancedGeneratorService: enhancedGeneratorService,
 	}
@@ -290,6 +294,7 @@ func (h *RecipeHandler) TestRecipeGeneration(c *gin.Context) {
 }
 
 // SearchRecipes handles GET /api/recipes/search
+// SearchRecipes handles GET /api/recipes/search
 func (h *RecipeHandler) SearchRecipes(c *gin.Context) {
 	var criteria models.SearchCriteria
 
@@ -302,35 +307,163 @@ func (h *RecipeHandler) SearchRecipes(c *gin.Context) {
 		return
 	}
 
-	// Set defaults
-	if criteria.Limit <= 0 || criteria.Limit > 50 {
+	// Set defaults and validate
+	if criteria.Limit <= 0 || criteria.Limit > 100 {
 		criteria.Limit = 20
 	}
+	if criteria.Offset < 0 {
+		criteria.Offset = 0
+	}
 
-	// For now, return mock search results
-	// TODO: Implement actual database search
-	mockRecipes := []models.RecipeData{
-		{
-			Title:       "豚キャベツ炒め",
-			CookingTime: 10,
-			Ingredients: []models.Ingredient{
-				{Name: "豚こま肉", Amount: "200g"},
-				{Name: "キャベツ", Amount: "1/4個"},
-			},
-			Steps:         []string{"材料を切る", "炒める", "味付けする"},
-			LazinessScore: 9.0,
-			Season:        "all",
-			Tags:          []string{"簡単", "10分以内"},
-		},
+	// Handle page-based pagination (alternative to offset)
+	if criteria.Page > 0 {
+		criteria.Offset = (criteria.Page - 1) * criteria.Limit
+	}
+
+	// Build SQL query with conditions
+	query := `
+		SELECT id, data, created_at
+		FROM recipes
+		WHERE 1=1
+	`
+	args := []interface{}{}
+
+	// Add search conditions
+	if criteria.Query != "" {
+		query += ` AND (
+			title LIKE ? OR 
+			json_extract(data, '$.ingredients') LIKE ?
+		)`
+		searchTerm := "%" + criteria.Query + "%"
+		args = append(args, searchTerm, searchTerm)
+	}
+
+	if criteria.Tag != "" {
+		query += ` AND json_extract(data, '$.tags') LIKE ?`
+		args = append(args, "%"+criteria.Tag+"%")
+	}
+
+	if criteria.Ingredient != "" {
+		query += ` AND json_extract(data, '$.ingredients') LIKE ?`
+		args = append(args, "%"+criteria.Ingredient+"%")
+	}
+
+	if criteria.MaxCookingTime > 0 {
+		query += ` AND cooking_time <= ?`
+		args = append(args, criteria.MaxCookingTime)
+	}
+
+	if criteria.MinLazinessScore > 0 {
+		query += ` AND laziness_score >= ?`
+		args = append(args, criteria.MinLazinessScore)
+	}
+
+	if criteria.Season != "" && criteria.Season != "all" {
+		query += ` AND (season = ? OR season = 'all')`
+		args = append(args, criteria.Season)
+	}
+
+	// Add ordering and pagination
+	query += ` ORDER BY laziness_score DESC, created_at DESC LIMIT ? OFFSET ?`
+	args = append(args, criteria.Limit, criteria.Offset)
+
+	// Execute query
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Database query failed",
+			"details": err.Error(),
+		})
+		return
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			// In a real application, we would log this error
+			_ = closeErr
+		}
+	}()
+
+	// Parse results
+	recipes := make([]models.RecipeData, 0, criteria.Limit)
+	for rows.Next() {
+		var id int
+		var dataJSON string
+		var createdAt string
+
+		if err := rows.Scan(&id, &dataJSON, &createdAt); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to scan recipe data",
+				"details": err.Error(),
+			})
+			return
+		}
+
+		// Parse JSON data
+		var recipe models.RecipeData
+		if err := json.Unmarshal([]byte(dataJSON), &recipe); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to parse recipe JSON",
+				"details": err.Error(),
+			})
+			return
+		}
+
+		recipes = append(recipes, recipe)
+	}
+
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Error during row iteration",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Get total count for pagination info (separate query for performance)
+	countQuery := `SELECT COUNT(*) FROM recipes WHERE 1=1`
+	countArgs := []interface{}{}
+
+	// Re-build count query with same conditions (without LIMIT/OFFSET)
+	if criteria.Query != "" {
+		countQuery += ` AND (title LIKE ? OR json_extract(data, '$.ingredients') LIKE ?)`
+		searchTerm := "%" + criteria.Query + "%"
+		countArgs = append(countArgs, searchTerm, searchTerm)
+	}
+	if criteria.Tag != "" {
+		countQuery += ` AND json_extract(data, '$.tags') LIKE ?`
+		countArgs = append(countArgs, "%"+criteria.Tag+"%")
+	}
+	if criteria.Ingredient != "" {
+		countQuery += ` AND json_extract(data, '$.ingredients') LIKE ?`
+		countArgs = append(countArgs, "%"+criteria.Ingredient+"%")
+	}
+	if criteria.MaxCookingTime > 0 {
+		countQuery += ` AND cooking_time <= ?`
+		countArgs = append(countArgs, criteria.MaxCookingTime)
+	}
+	if criteria.MinLazinessScore > 0 {
+		countQuery += ` AND laziness_score >= ?`
+		countArgs = append(countArgs, criteria.MinLazinessScore)
+	}
+	if criteria.Season != "" && criteria.Season != "all" {
+		countQuery += ` AND (season = ? OR season = 'all')`
+		countArgs = append(countArgs, criteria.Season)
+	}
+
+	var total int
+	if err := h.db.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
+		// If count fails, log but don't fail the whole request
+		total = len(recipes)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"recipes": mockRecipes,
-			"total":   1,
+			"recipes": recipes,
+			"total":   total,
 			"limit":   criteria.Limit,
 			"offset":  criteria.Offset,
+			"page":    criteria.Page,
 		},
 	})
 }
