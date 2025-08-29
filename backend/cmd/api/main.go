@@ -102,11 +102,15 @@ func main() {
 				3000.0, // monthly budget USD
 			)
 
+			// Diversity service (Issue #65)
+			diversityService := services.NewDiversityService(db, generatorService)
+
 			// Admin handler for new APIs
 			adminHandler = handlers.NewAdminHandler(
 				batchService,
 				embeddingService,
 				tokenRateLimiter,
+				diversityService,
 			)
 
 			log.Printf("GPT-5 Enhanced Services Initialized:")
@@ -257,6 +261,16 @@ func main() {
 				metricsAPI.POST("/budgets", adminHandler.UpdateBudgets)
 			}
 
+			// Diversity system endpoints (Issue #65)
+			diversityAPI := adminAPI.Group("/diversity")
+			{
+				diversityAPI.GET("/coverage", adminHandler.GetRecipeCoverage)
+				diversityAPI.GET("/metrics", adminHandler.GetDiversityMetrics)
+				diversityAPI.POST("/generate", adminHandler.GenerateDiverseRecipes)
+				diversityAPI.POST("/initialize", adminHandler.InitializeDiversitySystem)
+				diversityAPI.POST("/dimension-weights", adminHandler.UpdateDimensionWeights)
+			}
+
 			// System health
 			adminAPI.GET("/health", adminHandler.GetSystemHealth)
 		}
@@ -284,6 +298,8 @@ func main() {
 		log.Printf("  - Batch jobs: http://localhost:%s/api/admin/batch-generation/jobs", port)
 		log.Printf("  - Duplicate scan: http://localhost:%s/api/admin/duplicate-detection/scan", port)
 		log.Printf("  - Token metrics: http://localhost:%s/api/admin/metrics/token-usage", port)
+		log.Printf("  - Diversity coverage: http://localhost:%s/api/admin/diversity/coverage", port)
+		log.Printf("  - Diversity generate: http://localhost:%s/api/admin/diversity/generate", port)
 		log.Printf("  - Admin health: http://localhost:%s/api/admin/health", port)
 	}
 
