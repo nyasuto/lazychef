@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -15,14 +16,17 @@ import (
 // RecipeHandler handles recipe-related HTTP requests
 type RecipeHandler struct {
 	db                       *database.Database
+	recipeRepository         *services.RecipeRepository
 	generatorService         *services.RecipeGeneratorService
 	enhancedGeneratorService *services.EnhancedRecipeGeneratorService
 }
 
 // NewRecipeHandler creates a new recipe handler
 func NewRecipeHandler(db *database.Database, generatorService *services.RecipeGeneratorService, enhancedGeneratorService *services.EnhancedRecipeGeneratorService) *RecipeHandler {
+	recipeRepository := services.NewRecipeRepository(db)
 	return &RecipeHandler{
 		db:                       db,
+		recipeRepository:         recipeRepository,
 		generatorService:         generatorService,
 		enhancedGeneratorService: enhancedGeneratorService,
 	}
@@ -58,9 +62,30 @@ func (h *RecipeHandler) GenerateRecipe(c *gin.Context) {
 		return
 	}
 
+	// Save the generated recipe to database
+	recipe := &models.Recipe{
+		Data:      *result.Recipe,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := h.recipeRepository.SaveRecipe(recipe); err != nil {
+		// Log the error but don't fail the request - recipe generation was successful
+		// In a production system, you might want to queue this for retry
+		c.JSON(http.StatusOK, gin.H{
+			"recipe":       result.Recipe,
+			"metadata":     result.Metadata,
+			"save_warning": "Recipe generated but failed to save to database",
+			"save_error":   err.Error(),
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"recipe":   result.Recipe,
-		"metadata": result.Metadata,
+		"recipe":    result.Recipe,
+		"recipe_id": recipe.ID,
+		"metadata":  result.Metadata,
+		"saved":     true,
 	})
 }
 
@@ -220,10 +245,44 @@ func (h *RecipeHandler) GenerateBatchRecipes(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"recipes":  result.Recipes,
-		"metadata": result.Metadata,
-	})
+	// Save all generated recipes to database
+	recipeIDs := make([]int, 0, len(result.Recipes))
+	savedCount := 0
+	var saveErrors []string
+
+	for _, recipeData := range result.Recipes {
+		recipe := &models.Recipe{
+			Data:      recipeData,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+
+		if err := h.recipeRepository.SaveRecipe(recipe); err != nil {
+			saveErrors = append(saveErrors, err.Error())
+		} else {
+			recipeIDs = append(recipeIDs, recipe.ID)
+			savedCount++
+		}
+	}
+
+	response := gin.H{
+		"recipes":     result.Recipes,
+		"metadata":    result.Metadata,
+		"saved_count": savedCount,
+		"total_count": len(result.Recipes),
+	}
+
+	if len(recipeIDs) > 0 {
+		response["recipe_ids"] = recipeIDs
+		response["saved"] = true
+	}
+
+	if len(saveErrors) > 0 {
+		response["save_errors"] = saveErrors
+		response["save_warning"] = "Some recipes failed to save to database"
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // GetGeneratorHealth handles GET /api/recipes/health
