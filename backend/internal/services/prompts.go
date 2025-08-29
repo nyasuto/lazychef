@@ -49,7 +49,7 @@ func GetRecipeGenerationPrompt(req RecipeGenerationRequest) PromptTemplate {
   "tags": ["簡単", "時短", "ずぼら", "その他のタグ"],
   "season": "適切な季節",
   "laziness_score": 8.5,
-  "serving_size": 人数分,
+  "serving_size": 1,
   "difficulty": "easy",
   "total_cost": 推定コスト（円）,
   "nutrition_info": {
@@ -154,7 +154,7 @@ func GetBatchRecipeGenerationPrompt(req RecipeGenerationRequest, count int) Prom
       "tags": ["タグ1", "タグ2"],
       "season": "季節",
       "laziness_score": 8.5,
-      "serving_size": 人数,
+      "serving_size": 1,
       "difficulty": "easy",
       "total_cost": コスト,
       "nutrition_info": {"calories": カロリー, "protein": タンパク質}

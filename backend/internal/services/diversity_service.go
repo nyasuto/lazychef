@@ -366,7 +366,7 @@ func (s *DiversityService) generateSingleRecipe(prompt string, config models.Gen
 		Tags:          []string{"簡単", "多様化"},
 		Season:        "all",
 		LazinessScore: 8.0,
-		ServingSize:   1,
+		ServingSize:   models.FlexibleInt(1),
 		Difficulty:    "easy",
 	}
 

@@ -369,8 +369,8 @@ func (s *RecipeGeneratorService) validateAndEnhanceRecipe(recipe *models.RecipeD
 	}
 
 	// Set default serving size if not specified
-	if recipe.ServingSize <= 0 {
-		recipe.ServingSize = 1
+	if recipe.ServingSize.Int() <= 0 {
+		recipe.ServingSize = models.FlexibleInt(1)
 	}
 
 	// Set default difficulty if not specified
