@@ -117,7 +117,11 @@ func (s *AutoGenerationService) analyzeDimensionTypeCoverage(dimensionType strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to query dimensions: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			// Log the error or handle appropriately in production
+		}
+	}()
 
 	var allDimensions []models.RecipeDimension
 	for rows.Next() {
@@ -193,7 +197,11 @@ func (s *AutoGenerationService) getDimensionsByType() (map[string][]models.Recip
 	if err != nil {
 		return nil, fmt.Errorf("failed to query dimensions: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			// Log the error or handle appropriately in production
+		}
+	}()
 
 	dimensionsByType := make(map[string][]models.RecipeDimension)
 	for rows.Next() {
