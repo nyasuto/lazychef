@@ -3,6 +3,8 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+	
 	"lazychef/internal/database"
 	"lazychef/internal/models"
 )
@@ -12,6 +14,7 @@ type MealPlannerService struct {
 	db                   *database.Database
 	generator            *RecipeGeneratorService
 	ingredientAggregator *IngredientAggregator
+	recipeRepo           *RecipeRepository
 }
 
 // NewMealPlannerService creates a new meal planner service
@@ -20,6 +23,7 @@ func NewMealPlannerService(db *database.Database, generator *RecipeGeneratorServ
 		db:                   db,
 		generator:            generator,
 		ingredientAggregator: NewIngredientAggregator(),
+		recipeRepo:           NewRecipeRepository(db),
 	}
 }
 
@@ -118,6 +122,85 @@ func (s *MealPlannerService) createShoppingList(recipes []models.RecipeData) []m
 func (s *MealPlannerService) estimateTotalCost(items []models.ShoppingItem) float64 {
 	// Simple estimation: 200 yen per item average
 	return float64(len(items)) * 200
+}
+
+// GenerateShoppingListFromRecipeIDs generates shopping list from recipe IDs
+func (s *MealPlannerService) GenerateShoppingListFromRecipeIDs(recipeIDs []int) ([]models.ShoppingItem, error) {
+	// Get recipes by IDs
+	recipes, err := s.recipeRepo.GetRecipesByIDs(recipeIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recipes: %w", err)
+	}
+
+	// Convert Recipe objects to RecipeData objects
+	recipeDataList := make([]models.RecipeData, 0, len(recipes))
+	for _, recipe := range recipes {
+		recipeDataList = append(recipeDataList, recipe.Data)
+	}
+
+	// Generate shopping list using existing logic
+	shoppingList := s.createShoppingList(recipeDataList)
+
+	// Add categories to shopping items
+	for i := range shoppingList {
+		shoppingList[i].Category = s.getIngredientCategory(shoppingList[i].Item)
+	}
+
+	return shoppingList, nil
+}
+
+// getIngredientCategory determines the category of an ingredient
+func (s *MealPlannerService) getIngredientCategory(ingredient string) string {
+	// Define category mapping
+	categoryMap := map[string]string{
+		// 野菜
+		"キャベツ": "野菜", "レタス": "野菜", "トマト": "野菜", "きゅうり": "野菜",
+		"玉ねぎ": "野菜", "にんじん": "野菜", "じゃがいも": "野菜", "大根": "野菜",
+		"ブロッコリー": "野菜", "ほうれん草": "野菜", "小松菜": "野菜", "白菜": "野菜",
+		"なす": "野菜", "ピーマン": "野菜", "もやし": "野菜", "ねぎ": "野菜", "長ねぎ": "野菜",
+		
+		// 肉類
+		"豚肉": "肉類", "豚こま肉": "肉類", "豚ロース": "肉類", "豚バラ肉": "肉類",
+		"鶏肉": "肉類", "鶏もも肉": "肉類", "鶏むね肉": "肉類", "鶏ひき肉": "肉類",
+		"牛肉": "肉類", "合いびき肉": "肉類", "ひき肉": "肉類",
+		
+		// 魚介類
+		"サーモン": "魚介類", "まぐろ": "魚介類", "サバ": "魚介類", "アジ": "魚介類",
+		"エビ": "魚介類", "イカ": "魚介類", "ツナ缶": "魚介類",
+		
+		// 乳製品・卵
+		"牛乳": "乳製品", "チーズ": "乳製品", "バター": "乳製品", "ヨーグルト": "乳製品",
+		"卵": "乳製品",
+		
+		// 穀物・パン類
+		"米": "穀物", "ご飯": "穀物", "パン": "穀物", "食パン": "穀物",
+		"うどん": "穀物", "そば": "穀物", "パスタ": "穀物", "小麦粉": "穀物",
+		
+		// 調味料
+		"醤油": "調味料", "味噌": "調味料", "塩": "調味料", "砂糖": "調味料",
+		"酢": "調味料", "みりん": "調味料", "酒": "調味料", "料理酒": "調味料",
+		"ごま油": "調味料", "サラダ油": "調味料", "オリーブオイル": "調味料",
+		"こしょう": "調味料", "胡椒": "調味料", "マヨネーズ": "調味料", "ケチャップ": "調味料",
+		"ソース": "調味料", "だしの素": "調味料", "コンソメ": "調味料", "鶏がらスープの素": "調味料",
+		
+		// 豆腐・大豆製品
+		"豆腐": "豆腐・大豆製品", "厚揚げ": "豆腐・大豆製品", "油揚げ": "豆腐・大豆製品", "納豆": "豆腐・大豆製品",
+	}
+
+	// Check for exact match first
+	if category, exists := categoryMap[ingredient]; exists {
+		return category
+	}
+
+	// Check for partial matches
+	for key, category := range categoryMap {
+		if strings.Contains(ingredient, key) || strings.Contains(key, ingredient) {
+			return category
+		}
+	}
+
+	// Default category
+	return "その他"
 }
 
 // getFallbackRecipe returns a fallback recipe

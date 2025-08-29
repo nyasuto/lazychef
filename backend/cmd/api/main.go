@@ -207,6 +207,7 @@ func main() {
 		mealPlanAPI := r.Group("/api/meal-plans")
 		{
 			mealPlanAPI.POST("/create", mealPlanHandler.CreateMealPlan)
+			mealPlanAPI.POST("/shopping-list", mealPlanHandler.GenerateShoppingList)
 			mealPlanAPI.GET("/:id", mealPlanHandler.GetMealPlan)
 			mealPlanAPI.GET("/", mealPlanHandler.ListMealPlans)
 		}
