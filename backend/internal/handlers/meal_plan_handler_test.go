@@ -18,8 +18,8 @@ func TestMealPlanHandler_CreateMealPlan(t *testing.T) {
 	// Setup Gin in test mode
 	gin.SetMode(gin.TestMode)
 
-	// Create mock meal planner service
-	mockPlanner := &services.MealPlannerService{}
+	// Create properly initialized meal planner service
+	mockPlanner := services.NewMealPlannerService(nil, nil)
 	handler := NewMealPlanHandler(mockPlanner)
 
 	// Create test request
@@ -52,7 +52,7 @@ func TestMealPlanHandler_CreateMealPlan(t *testing.T) {
 func TestMealPlanHandler_CreateMealPlan_InvalidJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	mockPlanner := &services.MealPlannerService{}
+	mockPlanner := services.NewMealPlannerService(nil, nil)
 	handler := NewMealPlanHandler(mockPlanner)
 
 	w := httptest.NewRecorder()
