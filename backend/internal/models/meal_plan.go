@@ -46,6 +46,7 @@ type MealPlanPreferences struct {
 
 // SearchCriteria represents recipe search criteria
 type SearchCriteria struct {
+	Query            string  `json:"query" form:"query"` // General search query (title, ingredient)
 	Tag              string  `json:"tag" form:"tag"`
 	Ingredient       string  `json:"ingredient" form:"ingredient"`
 	MaxCookingTime   int     `json:"max_cooking_time" form:"max_cooking_time"`
@@ -53,6 +54,7 @@ type SearchCriteria struct {
 	Season           string  `json:"season" form:"season"`
 	Limit            int     `json:"limit" form:"limit"`
 	Offset           int     `json:"offset" form:"offset"`
+	Page             int     `json:"page" form:"page"` // Page number (alternative to offset)
 }
 
 // MealPlanData holds the JSON-stored meal plan information
