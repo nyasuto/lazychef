@@ -52,6 +52,7 @@ func main() {
 	// Initialize services
 	var recipeHandler *handlers.RecipeHandler
 	var mealPlanHandler *handlers.MealPlanHandler
+	var adminHandler *handlers.AdminHandler
 
 	if openaiConfig != nil {
 		// Initialize legacy generator service
@@ -73,12 +74,53 @@ func main() {
 			mealPlannerService := services.NewMealPlannerService(db, generatorService)
 			mealPlanHandler = handlers.NewMealPlanHandler(mealPlannerService)
 
+			// Initialize Phase 1 services
+			batchStoragePath := os.Getenv("BATCH_STORAGE_PATH")
+			if batchStoragePath == "" {
+				batchStoragePath = "./data/batch_files"
+			}
+
+			// Batch generation service
+			batchService := services.NewBatchGenerationService(
+				generatorService.GetClient(),
+				openaiConfig,
+				db.DB,
+				batchStoragePath,
+			)
+
+			// Embedding deduplicator
+			embeddingService := services.NewEmbeddingDeduplicator(
+				generatorService.GetClient(),
+				db.DB,
+			)
+
+			// Advanced token rate limiter
+			tokenRateLimiter := services.NewTokenRateLimiter(
+				openaiConfig.RequestsPerMinute,
+				1000,   // tokens per second
+				100.0,  // daily budget USD
+				3000.0, // monthly budget USD
+			)
+
+			// Admin handler for new APIs
+			adminHandler = handlers.NewAdminHandler(
+				batchService,
+				embeddingService,
+				tokenRateLimiter,
+			)
+
 			log.Printf("GPT-5 Enhanced Services Initialized:")
 			log.Printf("  - Ideation Model: %s", openaiConfig.IdeationModel)
 			log.Printf("  - Authoring Model: %s", openaiConfig.AuthoringModel)
 			log.Printf("  - Critique Model: %s", openaiConfig.CritiqueModel)
 			log.Printf("  - Structured Outputs: %t", openaiConfig.UseStructuredOutputs)
 			log.Printf("  - Food Safety Strict Mode: %t", openaiConfig.FoodSafetyStrictMode)
+
+			log.Printf("Phase 1 Services Initialized:")
+			log.Printf("  - Batch API Service: enabled")
+			log.Printf("  - Embedding Deduplicator: enabled")
+			log.Printf("  - Token Rate Limiter: enabled")
+			log.Printf("  - Batch Storage Path: %s", batchStoragePath)
 		}
 	}
 
@@ -178,6 +220,47 @@ func main() {
 		})
 	}
 
+	// Admin endpoints for Phase 1 features
+	if adminHandler != nil {
+		adminAPI := r.Group("/api/admin")
+		{
+			// Batch generation endpoints
+			batchAPI := adminAPI.Group("/batch-generation")
+			{
+				batchAPI.POST("/submit", adminHandler.SubmitBatchGeneration)
+				batchAPI.GET("/status/:job_id", adminHandler.GetBatchStatus)
+				batchAPI.POST("/cancel/:job_id", adminHandler.CancelBatchJob)
+				batchAPI.GET("/results/:job_id", adminHandler.GetBatchResults)
+				batchAPI.GET("/jobs", adminHandler.ListBatchJobs)
+			}
+
+			// Duplicate detection endpoints
+			duplicateAPI := adminAPI.Group("/duplicate-detection")
+			{
+				duplicateAPI.POST("/scan", adminHandler.ScanDuplicates)
+				duplicateAPI.GET("/results", adminHandler.GetDuplicateResults)
+				duplicateAPI.POST("/check", adminHandler.CheckRecipeDuplicates)
+			}
+
+			// Embedding endpoints
+			embeddingAPI := adminAPI.Group("/embeddings")
+			{
+				embeddingAPI.POST("/refresh/:recipe_id", adminHandler.RefreshEmbedding)
+			}
+
+			// Metrics endpoints
+			metricsAPI := adminAPI.Group("/metrics")
+			{
+				metricsAPI.GET("/token-usage", adminHandler.GetTokenUsageMetrics)
+				metricsAPI.GET("/cost-efficiency", adminHandler.GetCostEfficiencyAnalysis)
+				metricsAPI.POST("/budgets", adminHandler.UpdateBudgets)
+			}
+
+			// System health
+			adminAPI.GET("/health", adminHandler.GetSystemHealth)
+		}
+	}
+
 	// Get port from environment
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -193,6 +276,14 @@ func main() {
 		log.Printf("Enhanced generation: http://localhost:%s/api/recipes/generate-enhanced", port)
 		log.Printf("Safety validation: http://localhost:%s/api/recipes/validate-safety", port)
 		log.Printf("Quality validation: http://localhost:%s/api/recipes/validate-quality", port)
+	}
+
+	if adminHandler != nil {
+		log.Printf("Admin endpoints available:")
+		log.Printf("  - Batch jobs: http://localhost:%s/api/admin/batch-generation/jobs", port)
+		log.Printf("  - Duplicate scan: http://localhost:%s/api/admin/duplicate-detection/scan", port)
+		log.Printf("  - Token metrics: http://localhost:%s/api/admin/metrics/token-usage", port)
+		log.Printf("  - Admin health: http://localhost:%s/api/admin/health", port)
 	}
 
 	if err := r.Run(":" + port); err != nil {

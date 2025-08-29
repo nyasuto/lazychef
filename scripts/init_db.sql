@@ -5,6 +5,9 @@
 PRAGMA foreign_keys = ON;
 
 -- Drop tables if they exist (for development)
+DROP TABLE IF EXISTS duplicate_detection_results;
+DROP TABLE IF EXISTS recipe_embeddings;
+DROP TABLE IF EXISTS recipe_generation_jobs;
 DROP TABLE IF EXISTS meal_plans;
 DROP TABLE IF EXISTS user_preferences; 
 DROP TABLE IF EXISTS recipes;
@@ -76,6 +79,80 @@ CREATE INDEX idx_meal_plans_created_at ON meal_plans(created_at);
 
 -- User preferences index
 CREATE INDEX idx_user_preferences_user_id ON user_preferences(user_id);
+
+-- Phase 1: Batch API & Embedding Tables
+
+-- Batch job management table
+CREATE TABLE recipe_generation_jobs (
+    id TEXT PRIMARY KEY,                    -- UUID
+    batch_type TEXT NOT NULL,               -- 'sync', 'batch_api'
+    config JSON NOT NULL,                   -- generation parameters
+    model_info JSON,                        -- model, seed, system_fingerprint
+    cost_data JSON,                         -- tokens, $ spent
+    status TEXT NOT NULL,                   -- 'pending', 'submitted', 'completed', 'failed'
+    batch_id TEXT,                          -- OpenAI Batch API ID
+    submitted_at DATETIME,
+    completed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CHECK (json_valid(config)),
+    CHECK (json_valid(model_info)),
+    CHECK (json_valid(cost_data)),
+    CHECK (status IN ('pending', 'submitted', 'completed', 'failed', 'cancelled')),
+    CHECK (batch_type IN ('sync', 'batch_api'))
+);
+
+-- Recipe embeddings for similarity detection
+CREATE TABLE recipe_embeddings (
+    recipe_id INTEGER PRIMARY KEY,
+    embedding_version TEXT NOT NULL,        -- 'v3', etc
+    content_hash TEXT NOT NULL,             -- content change detection
+    embedding BLOB NOT NULL,                -- vector data
+    dimensions INTEGER NOT NULL,            -- 1536 for v3
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+    CHECK (dimensions > 0)
+);
+
+-- Duplicate detection results
+CREATE TABLE duplicate_detection_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipe_id INTEGER NOT NULL,
+    similar_recipe_id INTEGER NOT NULL,
+    similarity_score REAL NOT NULL,         -- cosine similarity [0,1]
+    jaccard_score REAL,                     -- ingredient overlap [0,1]
+    detection_method TEXT NOT NULL,         -- 'embedding', 'jaccard', 'combined'
+    detected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+    FOREIGN KEY (similar_recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+    CHECK (similarity_score >= 0 AND similarity_score <= 1),
+    CHECK (jaccard_score IS NULL OR (jaccard_score >= 0 AND jaccard_score <= 1)),
+    CHECK (detection_method IN ('embedding', 'jaccard', 'combined')),
+    CHECK (recipe_id != similar_recipe_id)
+);
+
+-- Phase 1: Indexes for new tables
+
+-- Batch job indexes
+CREATE INDEX idx_batch_jobs_status ON recipe_generation_jobs(status);
+CREATE INDEX idx_batch_jobs_batch_type ON recipe_generation_jobs(batch_type);
+CREATE INDEX idx_batch_jobs_batch_id ON recipe_generation_jobs(batch_id);
+CREATE INDEX idx_batch_jobs_created_at ON recipe_generation_jobs(created_at);
+
+-- Embedding indexes
+CREATE INDEX idx_embeddings_version ON recipe_embeddings(embedding_version);
+CREATE INDEX idx_embeddings_hash ON recipe_embeddings(content_hash);
+CREATE INDEX idx_embeddings_created_at ON recipe_embeddings(created_at);
+
+-- Duplicate detection indexes
+CREATE INDEX idx_duplicates_recipe_id ON duplicate_detection_results(recipe_id);
+CREATE INDEX idx_duplicates_similar_id ON duplicate_detection_results(similar_recipe_id);
+CREATE INDEX idx_duplicates_similarity_score ON duplicate_detection_results(similarity_score);
+CREATE INDEX idx_duplicates_method ON duplicate_detection_results(detection_method);
+CREATE INDEX idx_duplicates_detected_at ON duplicate_detection_results(detected_at);
 
 -- Insert default user preferences
 INSERT INTO user_preferences (user_id, preferences) VALUES (
