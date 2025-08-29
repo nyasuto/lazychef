@@ -38,7 +38,7 @@ make quickstart-gui
 ```
 
 #### 3. 確認
-- **GUI**: http://localhost:5173 (メインインターフェース)
+- **GUI**: http://localhost:3000 (メインインターフェース)
 - **API**: http://localhost:8080/api/health (APIヘルスチェック)
 
 ## 🎯 PoC デモ

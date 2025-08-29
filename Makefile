@@ -162,7 +162,7 @@ fullstack-dev:
 	@echo "🚀 LazyChef Full Stack Development Mode"
 	@echo "Starting backend and frontend servers..."
 	@echo "📋 Backend: http://localhost:8080"
-	@echo "🌐 Frontend: http://localhost:5173"
+	@echo "🌐 Frontend: http://localhost:3000"
 	@echo ""
 	@echo "Press Ctrl+C to stop all services"
 	@($(MAKE) run &) && $(MAKE) frontend-dev
@@ -209,7 +209,7 @@ quickstart-gui:
 	@$(MAKE) init-db
 	@echo "5. Starting backend and frontend servers..."
 	@echo "✅ Setup complete! LazyChef starting with GUI"
-	@echo "🌐 Frontend GUI: http://localhost:5173"
+	@echo "🌐 Frontend GUI: http://localhost:3000"
 	@echo "📋 Backend API: http://localhost:8080"
 	@echo "🎯 Admin Panel: http://localhost:8080/api/admin/health"
 	@echo ""
