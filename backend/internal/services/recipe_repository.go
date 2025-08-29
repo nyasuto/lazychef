@@ -7,6 +7,7 @@ import (
 	"lazychef/internal/database"
 	"lazychef/internal/models"
 	"log"
+	"strings"
 )
 
 // RecipeRepository handles recipe database operations
@@ -203,4 +204,58 @@ func (r *RecipeRepository) CountRecipes() (int, error) {
 	}
 
 	return count, nil
+}
+
+// GetRecipesByIDs gets multiple recipes by their IDs
+func (r *RecipeRepository) GetRecipesByIDs(ids []int) ([]*models.Recipe, error) {
+	if len(ids) == 0 {
+		return []*models.Recipe{}, nil
+	}
+
+	// Build query with placeholders
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, data FROM recipes
+		WHERE id IN (%s)
+	`, strings.Join(placeholders, ","))
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query recipes by IDs: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Warning: failed to close rows: %v", err)
+		}
+	}()
+
+	recipes := make([]*models.Recipe, 0, len(ids))
+	for rows.Next() {
+		var id int
+		var data string
+
+		if err := rows.Scan(&id, &data); err != nil {
+			return nil, fmt.Errorf("failed to scan recipe row: %w", err)
+		}
+
+		var recipe models.Recipe
+		if err := json.Unmarshal([]byte(data), &recipe); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal recipe: %w", err)
+		}
+
+		recipe.ID = id
+		recipes = append(recipes, &recipe)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating recipe rows: %w", err)
+	}
+
+	return recipes, nil
 }

@@ -133,13 +133,37 @@ func (h *MealPlanHandler) GenerateShoppingList(c *gin.Context) {
 		return
 	}
 
-	// TODO: Implement shopping list generation from recipe IDs
+	// Validate recipe IDs
+	if len(req.RecipeIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "No recipe IDs provided",
+		})
+		return
+	}
+
+	// Generate shopping list from recipe IDs
+	shoppingList, err := h.planner.GenerateShoppingListFromRecipeIDs(req.RecipeIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to generate shopping list",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Calculate total estimated cost
+	totalCost := 0
+	for range shoppingList {
+		// Simple cost estimation: 200 yen per unique item
+		totalCost += 200
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"message":    "Shopping list generation not yet implemented",
-			"recipe_ids": req.RecipeIDs,
+			"shopping_list": shoppingList,
+			"total_cost":    totalCost,
+			"recipe_count":  len(req.RecipeIDs),
 		},
 	})
 }
