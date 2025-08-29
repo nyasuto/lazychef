@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,19 +14,21 @@ import (
 
 // AdminHandler handles administrative endpoints for batch processing and analytics
 type AdminHandler struct {
-	batchService     *services.BatchGenerationService
-	embeddingService *services.EmbeddingDeduplicator
-	tokenRateLimiter *services.TokenRateLimiter
-	diversityService *services.DiversityService
+	batchService         *services.BatchGenerationService
+	embeddingService     *services.EmbeddingDeduplicator
+	tokenRateLimiter     *services.TokenRateLimiter
+	diversityService     *services.DiversityService
+	autoGenerationService *services.AutoGenerationService
 }
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(batchService *services.BatchGenerationService, embeddingService *services.EmbeddingDeduplicator, tokenRateLimiter *services.TokenRateLimiter, diversityService *services.DiversityService) *AdminHandler {
+func NewAdminHandler(batchService *services.BatchGenerationService, embeddingService *services.EmbeddingDeduplicator, tokenRateLimiter *services.TokenRateLimiter, diversityService *services.DiversityService, autoGenerationService *services.AutoGenerationService) *AdminHandler {
 	return &AdminHandler{
-		batchService:     batchService,
-		embeddingService: embeddingService,
-		tokenRateLimiter: tokenRateLimiter,
-		diversityService: diversityService,
+		batchService:         batchService,
+		embeddingService:     embeddingService,
+		tokenRateLimiter:     tokenRateLimiter,
+		diversityService:     diversityService,
+		autoGenerationService: autoGenerationService,
 	}
 }
 
@@ -641,5 +644,105 @@ func (h *AdminHandler) InitializeDiversitySystem(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Diversity system initialized successfully",
+	})
+}
+
+// GetCoverageAnalysis handles GET /api/admin/auto-generation/coverage
+func (h *AdminHandler) GetCoverageAnalysis(c *gin.Context) {
+	coverage, err := h.autoGenerationService.AnalyzeCoverage()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to analyze coverage",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    coverage,
+	})
+}
+
+// GenerateAutoRecipes handles POST /api/admin/auto-generation/generate
+func (h *AdminHandler) GenerateAutoRecipes(c *gin.Context) {
+	var req services.AutoGenerationRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Set default strategy if not provided
+	if req.Strategy == "" {
+		req.Strategy = services.StrategyDiversityGapFill
+	}
+
+	// Get priority targets for generation
+	priorityTargets, err := h.autoGenerationService.GeneratePriorityTargets(req.Count)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to generate priority targets",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Generate recipes based on priority targets
+	var generatedRecipes []models.RecipeData
+	var generationErrors []string
+
+	for i, target := range priorityTargets {
+		if i >= req.Count {
+			break
+		}
+
+		// Convert dimension combination to generation parameters
+		genReq := h.autoGenerationService.GetGenerationParameters(target)
+		
+		// Apply user constraints
+		if req.MaxCookingTime > 0 {
+			genReq.MaxCookingTime = req.MaxCookingTime
+		}
+
+		// TODO: Integrate with actual recipe generation service
+		// This would call h.generatorService.GenerateRecipe(ctx, genReq)
+		// For now, return the generation parameters as placeholder
+		
+		// Placeholder recipe data
+		recipe := models.RecipeData{
+			Title:         fmt.Sprintf("自動生成レシピ %d", i+1),
+			Ingredients:   make([]models.Ingredient, 0),
+			Steps:         []string{"準備中", "実装予定"},
+			CookingTime:   genReq.MaxCookingTime,
+			ServingSize:   models.FlexibleInt(genReq.Servings),
+			Difficulty:    "easy",
+			Season:        genReq.Season,
+			LazinessScore: 8.0,
+			Tags:          []string{"自動生成", "多様性"},
+		}
+
+		// Convert ingredients
+		for _, ingredientName := range genReq.Ingredients {
+			recipe.Ingredients = append(recipe.Ingredients, models.Ingredient{
+				Name:   ingredientName,
+				Amount: "適量",
+			})
+		}
+
+		generatedRecipes = append(generatedRecipes, recipe)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":           true,
+		"generated_count":   len(generatedRecipes),
+		"requested_count":   req.Count,
+		"recipes":           generatedRecipes,
+		"priority_targets":  priorityTargets,
+		"generation_errors": generationErrors,
+		"note":             "Phase 1実装: 実際のレシピ生成は次フェーズで実装予定",
 	})
 }
