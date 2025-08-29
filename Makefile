@@ -1,4 +1,4 @@
-.PHONY: build run test clean setup dev deps lint fmt quality help frontend-lint frontend-build frontend-dev frontend-install fullstack-dev
+.PHONY: build run test clean setup dev deps lint fmt quality help frontend-lint frontend-build frontend-dev frontend-install fullstack-dev stop
 
 # Go parameters
 GOCMD=go
@@ -155,7 +155,7 @@ docker-run:
 	docker run -p 8080:8080 --env-file .env lazychef:latest
 
 # Development shortcuts
-.PHONY: start stop restart logs quickstart quickstart-gui poc-demo reset-db demo-data logs-errors logs-api
+.PHONY: start stop restart logs quickstart quickstart-gui poc-demo reset-db demo-data logs-errors logs-api status
 
 ## fullstack-dev: Start both backend and frontend in development mode
 fullstack-dev:
@@ -164,6 +164,7 @@ fullstack-dev:
 	@echo "📋 Backend: http://localhost:8080"
 	@echo "🌐 Frontend: http://localhost:3000"
 	@echo ""
+	@echo "💡 Use 'make stop' in another terminal to stop all services"
 	@echo "Press Ctrl+C to stop all services"
 	@($(MAKE) run &) && $(MAKE) frontend-dev
 
@@ -188,6 +189,7 @@ quickstart:
 	@echo "🎯 Admin Panel: http://localhost:8080/api/admin/health"
 	@echo ""
 	@echo "💡 For full GUI experience, run 'make quickstart-gui' instead"
+	@echo "💡 Use 'make stop' to stop the server"
 	@$(MAKE) run
 
 ## quickstart-gui: Complete setup and start with GUI (Frontend + Backend)
@@ -213,6 +215,7 @@ quickstart-gui:
 	@echo "📋 Backend API: http://localhost:8080"
 	@echo "🎯 Admin Panel: http://localhost:8080/api/admin/health"
 	@echo ""
+	@echo "💡 Use 'make stop' in another terminal to stop all services"
 	@echo "Press Ctrl+C to stop all services"
 	@$(MAKE) fullstack-dev
 
@@ -247,8 +250,62 @@ demo-data: reset-db
 ## start: Quick start (alias for run)
 start: run
 
+## stop: Stop all LazyChef services
+stop:
+	@echo "🛑 Stopping LazyChef services..."
+	@echo "Checking and stopping processes on ports 8080 and 3000..."
+	@-lsof -ti:8080 | xargs kill -9 2>/dev/null || echo "No process on port 8080"
+	@-lsof -ti:3000 | xargs kill -9 2>/dev/null || echo "No process on port 3000"
+	@echo "Stopping backend services by process name..."
+	@-pkill -f "go run.*main.go" 2>/dev/null || true
+	@-pkill -f "lazychef" 2>/dev/null || true
+	@-pkill -f "air" 2>/dev/null || true
+	@echo "Stopping frontend services by process name..."
+	@-pkill -f "vite.*dev" 2>/dev/null || true
+	@-pkill -f "npm.*dev" 2>/dev/null || true
+	@-pkill -f "node.*vite" 2>/dev/null || true
+	@-pkill -f "frontend.*dev" 2>/dev/null || true
+	@echo "Cleaning up any remaining processes..."
+	@sleep 1
+	@echo "✅ All LazyChef services stopped"
+	@echo "💡 Ports 8080 and 3000 are now available"
+
+## status: Check LazyChef services status
+status:
+	@echo "📊 LazyChef Services Status"
+	@echo ""
+	@echo "🔍 Checking port 8080 (Backend API):"
+	@if lsof -i:8080 >/dev/null 2>&1; then \
+		echo "✅ Backend running on port 8080"; \
+		lsof -i:8080 | grep LISTEN || true; \
+	else \
+		echo "❌ No process on port 8080"; \
+	fi
+	@echo ""
+	@echo "🔍 Checking port 3000 (Frontend):"
+	@if lsof -i:3000 >/dev/null 2>&1; then \
+		echo "✅ Frontend running on port 3000"; \
+		lsof -i:3000 | grep LISTEN || true; \
+	else \
+		echo "❌ No process on port 3000"; \
+	fi
+	@echo ""
+	@echo "🔍 LazyChef processes:"
+	@( \
+		ps aux | grep "lazychef" | grep -v grep; \
+		ps aux | grep "go run.*cmd/api/main.go" | grep -v grep; \
+		ps aux | grep "go run.*main.go" | grep lazychef | grep -v grep; \
+		ps aux | grep "air" | grep lazychef | grep -v grep; \
+		ps aux | grep "vite.*dev" | grep frontend | grep -v grep; \
+		ps aux | grep "npm.*dev" | grep frontend | grep -v grep; \
+	) 2>/dev/null | head -10 || echo "❌ No LazyChef processes found"
+	@echo ""
+	@echo "💡 Use 'make quickstart' or 'make quickstart-gui' to start services"
+
 ## restart: Stop and start again  
-restart: clean build run
+restart: stop
+	@sleep 2
+	@$(MAKE) run
 
 ## logs: Show application logs (placeholder)
 logs:
