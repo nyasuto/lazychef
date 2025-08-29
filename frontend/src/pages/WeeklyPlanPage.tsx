@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import WeeklyPlan from '../components/meal-plan/WeeklyPlan';
 import ShoppingList from '../components/meal-plan/ShoppingList';
+import RecipeDetailModal from '../components/recipe/RecipeDetailModal';
 import Button from '../components/common/Button';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { createMealPlan } from '../services/api';
@@ -11,6 +12,10 @@ const WeeklyPlanPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(getStartOfWeek(new Date()));
+  
+  // モーダル状態管理
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // 週の開始日（月曜日）を取得
   function getStartOfWeek(date: Date): Date {
@@ -119,8 +124,14 @@ const WeeklyPlanPage: React.FC = () => {
 
   // レシピクリック
   const handleRecipeClick = (recipe: Recipe) => {
-    console.log('Recipe clicked:', recipe.title);
-    // TODO: レシピ詳細モーダル表示
+    setSelectedRecipe(recipe);
+    setIsModalOpen(true);
+  };
+
+  // モーダルクローズ
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setSelectedRecipe(null);
   };
 
   // 買い物リスト項目トグル
@@ -265,6 +276,13 @@ const WeeklyPlanPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* レシピ詳細モーダル */}
+      <RecipeDetailModal
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        recipe={selectedRecipe}
+      />
     </div>
   );
 };
