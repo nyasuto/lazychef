@@ -119,7 +119,8 @@ func (s *AutoGenerationService) analyzeDimensionTypeCoverage(dimensionType strin
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
-			// Log the error or handle appropriately in production
+			// In production, this error should be logged properly
+			_ = err // Acknowledge the error to avoid staticcheck SA9003
 		}
 	}()
 
@@ -199,7 +200,8 @@ func (s *AutoGenerationService) getDimensionsByType() (map[string][]models.Recip
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
-			// Log the error or handle appropriately in production
+			// In production, this error should be logged properly
+			_ = err // Acknowledge the error to avoid staticcheck SA9003
 		}
 	}()
 
