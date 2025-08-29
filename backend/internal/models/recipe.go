@@ -2,8 +2,42 @@ package models
 
 import (
 	"encoding/json"
+	"strconv"
 	"time"
 )
+
+// FlexibleInt is a type that can be unmarshaled from both string and int
+type FlexibleInt int
+
+// UnmarshalJSON implements json.Unmarshaler for FlexibleInt
+func (fi *FlexibleInt) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as int first
+	var intVal int
+	if err := json.Unmarshal(data, &intVal); err == nil {
+		*fi = FlexibleInt(intVal)
+		return nil
+	}
+
+	// Try to unmarshal as string and convert to int
+	var strVal string
+	if err := json.Unmarshal(data, &strVal); err != nil {
+		return err
+	}
+
+	// Convert string to int
+	intVal, err := strconv.Atoi(strVal)
+	if err != nil {
+		return err
+	}
+
+	*fi = FlexibleInt(intVal)
+	return nil
+}
+
+// Int returns the int value
+func (fi FlexibleInt) Int() int {
+	return int(fi)
+}
 
 // Ingredient represents a recipe ingredient
 type Ingredient struct {
@@ -38,7 +72,7 @@ type RecipeData struct {
 	Season        string         `json:"season" binding:"required,oneof=spring summer fall winter all"`
 	LazinessScore float64        `json:"laziness_score" binding:"required,min=1.0,max=10.0"`
 	NutritionInfo *NutritionInfo `json:"nutrition_info,omitempty"`
-	ServingSize   int            `json:"serving_size" binding:"min=1"`
+	ServingSize   FlexibleInt    `json:"serving_size" binding:"min=1"`
 	Difficulty    string         `json:"difficulty,omitempty" binding:"omitempty,oneof=easy medium hard"`
 	TotalCost     int            `json:"total_cost,omitempty"` // Cost in yen
 }
@@ -201,8 +235,8 @@ func (r *RecipeData) Validate() error {
 	if r.LazinessScore < 1.0 || r.LazinessScore > 10.0 {
 		return ErrInvalidLazinessScore
 	}
-	if r.ServingSize <= 0 {
-		r.ServingSize = 1 // Default serving size
+	if r.ServingSize.Int() <= 0 {
+		r.ServingSize = FlexibleInt(1) // Default serving size
 	}
 	return nil
 }

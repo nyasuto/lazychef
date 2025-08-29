@@ -26,7 +26,7 @@ func TestRecipeCache_SetAndGet(t *testing.T) {
 			Steps:         []string{"step1"},
 			Season:        "all",
 			LazinessScore: 8.0,
-			ServingSize:   2,
+			ServingSize:   models.FlexibleInt(2),
 		},
 		Metadata: GenerationMetadata{
 			RequestID:   "test-123",
