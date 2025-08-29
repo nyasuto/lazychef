@@ -248,6 +248,8 @@ func (s *AutoGenerationService) DimensionCombinationToIngredients(combo Dimensio
 			ingredients = append(ingredients, "豚こま肉")
 		case "牛肉":
 			ingredients = append(ingredients, "牛切り落とし")
+		case "魚":
+			ingredients = append(ingredients, "鮭")
 		case "卵":
 			ingredients = append(ingredients, "卵")
 		case "豆腐":
