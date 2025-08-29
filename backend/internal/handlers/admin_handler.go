@@ -14,20 +14,20 @@ import (
 
 // AdminHandler handles administrative endpoints for batch processing and analytics
 type AdminHandler struct {
-	batchService         *services.BatchGenerationService
-	embeddingService     *services.EmbeddingDeduplicator
-	tokenRateLimiter     *services.TokenRateLimiter
-	diversityService     *services.DiversityService
+	batchService          *services.BatchGenerationService
+	embeddingService      *services.EmbeddingDeduplicator
+	tokenRateLimiter      *services.TokenRateLimiter
+	diversityService      *services.DiversityService
 	autoGenerationService *services.AutoGenerationService
 }
 
 // NewAdminHandler creates a new admin handler
 func NewAdminHandler(batchService *services.BatchGenerationService, embeddingService *services.EmbeddingDeduplicator, tokenRateLimiter *services.TokenRateLimiter, diversityService *services.DiversityService, autoGenerationService *services.AutoGenerationService) *AdminHandler {
 	return &AdminHandler{
-		batchService:         batchService,
-		embeddingService:     embeddingService,
-		tokenRateLimiter:     tokenRateLimiter,
-		diversityService:     diversityService,
+		batchService:          batchService,
+		embeddingService:      embeddingService,
+		tokenRateLimiter:      tokenRateLimiter,
+		diversityService:      diversityService,
 		autoGenerationService: autoGenerationService,
 	}
 }
@@ -702,7 +702,7 @@ func (h *AdminHandler) GenerateAutoRecipes(c *gin.Context) {
 
 		// Convert dimension combination to generation parameters
 		genReq := h.autoGenerationService.GetGenerationParameters(target)
-		
+
 		// Apply user constraints
 		if req.MaxCookingTime > 0 {
 			genReq.MaxCookingTime = req.MaxCookingTime
@@ -711,7 +711,7 @@ func (h *AdminHandler) GenerateAutoRecipes(c *gin.Context) {
 		// TODO: Integrate with actual recipe generation service
 		// This would call h.generatorService.GenerateRecipe(ctx, genReq)
 		// For now, return the generation parameters as placeholder
-		
+
 		// Placeholder recipe data
 		recipe := models.RecipeData{
 			Title:         fmt.Sprintf("自動生成レシピ %d", i+1),
@@ -743,6 +743,6 @@ func (h *AdminHandler) GenerateAutoRecipes(c *gin.Context) {
 		"recipes":           generatedRecipes,
 		"priority_targets":  priorityTargets,
 		"generation_errors": generationErrors,
-		"note":             "Phase 1実装: 実際のレシピ生成は次フェーズで実装予定",
+		"note":              "Phase 1実装: 実際のレシピ生成は次フェーズで実装予定",
 	})
 }

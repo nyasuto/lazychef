@@ -25,20 +25,20 @@ type DimensionCombination struct {
 
 // CoverageAnalysis represents analysis of recipe coverage
 type CoverageAnalysis struct {
-	TotalCombinations      int                     `json:"total_combinations"`
-	CoveredCombinations    int                     `json:"covered_combinations"`
-	CoveragePercentage     float64                 `json:"coverage_percentage"`
-	UncoveredCombinations  []DimensionCombination  `json:"uncovered_combinations"`
-	PriorityTargets        []DimensionCombination  `json:"priority_targets"`
-	DimensionTypeAnalysis  map[string]DimensionAnalysis `json:"dimension_type_analysis"`
+	TotalCombinations     int                          `json:"total_combinations"`
+	CoveredCombinations   int                          `json:"covered_combinations"`
+	CoveragePercentage    float64                      `json:"coverage_percentage"`
+	UncoveredCombinations []DimensionCombination       `json:"uncovered_combinations"`
+	PriorityTargets       []DimensionCombination       `json:"priority_targets"`
+	DimensionTypeAnalysis map[string]DimensionAnalysis `json:"dimension_type_analysis"`
 }
 
 // DimensionAnalysis represents coverage analysis for a specific dimension type
 type DimensionAnalysis struct {
-	DimensionType string             `json:"dimension_type"`
-	TotalValues   int                `json:"total_values"`
-	CoveredValues int                `json:"covered_values"`
-	Coverage      float64            `json:"coverage"`
+	DimensionType string                   `json:"dimension_type"`
+	TotalValues   int                      `json:"total_values"`
+	CoveredValues int                      `json:"covered_values"`
+	Coverage      float64                  `json:"coverage"`
 	MissingValues []models.RecipeDimension `json:"missing_values"`
 }
 
@@ -47,8 +47,8 @@ type GenerationStrategy string
 
 const (
 	StrategyDiversityGapFill GenerationStrategy = "diversity_gap_fill"
-	StrategyRandom          GenerationStrategy = "random"
-	StrategyWeighted        GenerationStrategy = "weighted"
+	StrategyRandom           GenerationStrategy = "random"
+	StrategyWeighted         GenerationStrategy = "weighted"
 )
 
 // AutoGenerationRequest represents a request for automatic recipe generation
@@ -72,7 +72,7 @@ func NewAutoGenerationService(db *database.Database, diversityService *Diversity
 func (s *AutoGenerationService) AnalyzeCoverage() (*CoverageAnalysis, error) {
 	// Get all dimension types and their values
 	dimensionTypes := []string{"meal_type", "protein", "cooking_method", "seasoning", "laziness_level"}
-	
+
 	analysis := &CoverageAnalysis{
 		DimensionTypeAnalysis: make(map[string]DimensionAnalysis),
 	}
@@ -286,10 +286,10 @@ func (s *AutoGenerationService) DimensionCombinationToIngredients(combo Dimensio
 // GetGenerationParameters converts dimension combination to generation parameters
 func (s *AutoGenerationService) GetGenerationParameters(combo DimensionCombination) RecipeGenerationRequest {
 	req := RecipeGenerationRequest{
-		Ingredients: s.DimensionCombinationToIngredients(combo),
-		Season:      "all",
+		Ingredients:    s.DimensionCombinationToIngredients(combo),
+		Season:         "all",
 		MaxCookingTime: 15, // Default
-		Servings:    1,
+		Servings:       1,
 	}
 
 	// Adjust cooking time based on laziness level
