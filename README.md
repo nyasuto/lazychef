@@ -2,6 +2,32 @@
 
 個人向けの自炊継続支援サービス。AIを活用して週単位の買い物リストとレシピを提案し、ずぼらな人でも継続できる自炊をサポートします。
 
+## 🚀 クイックスタート
+
+**最短3ステップで開始:**
+```bash
+# 1. リポジトリクローン
+git clone https://github.com/nyasuto/lazychef.git
+cd lazychef
+
+# 2. 環境設定
+cp .env.example .env
+# .envファイルでOPENAI_API_KEYを設定
+
+# 3. 起動
+make quickstart
+```
+
+詳細は [QUICKSTART.md](./QUICKSTART.md) をご覧ください。
+
+## 📋 主要機能
+
+- **🤖 AI レシピ生成** - GPT-5による多段階生成（Phase 0）
+- **🛡️ 食品安全チェック** - USDA基準による温度検証
+- **💰 Batch API** - 50%コスト削減の大規模生成（Phase 1）
+- **🔍 重複検出** - Embedding による類似レシピ検出
+- **📊 コスト管理** - トークン使用量・予算監視
+
 ## 🎯 プロジェクト概要
 
 ### 解決する課題

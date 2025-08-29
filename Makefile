@@ -1,4 +1,4 @@
-.PHONY: build run test clean setup dev deps lint fmt quality help frontend-lint frontend-build
+.PHONY: build run test clean setup dev deps lint fmt quality help frontend-lint frontend-build frontend-dev frontend-install fullstack-dev
 
 # Go parameters
 GOCMD=go
@@ -87,6 +87,24 @@ frontend-lint:
 		echo "Frontend directory not found, skipping frontend lint"; \
 	fi
 
+## frontend-install: Install frontend dependencies
+frontend-install:
+	@echo "Installing frontend dependencies..."
+	@if [ -d "frontend" ]; then \
+		cd frontend && npm install; \
+	else \
+		echo "Frontend directory not found, skipping frontend install"; \
+	fi
+
+## frontend-dev: Start frontend development server
+frontend-dev:
+	@echo "Starting frontend development server..."
+	@if [ -d "frontend" ]; then \
+		cd frontend && npm run dev; \
+	else \
+		echo "Frontend directory not found, skipping frontend dev"; \
+	fi
+
 ## frontend-build: Build frontend for production
 frontend-build:
 	@echo "Building frontend..."
@@ -137,7 +155,94 @@ docker-run:
 	docker run -p 8080:8080 --env-file .env lazychef:latest
 
 # Development shortcuts
-.PHONY: start stop restart logs
+.PHONY: start stop restart logs quickstart quickstart-gui poc-demo reset-db demo-data logs-errors logs-api
+
+## fullstack-dev: Start both backend and frontend in development mode
+fullstack-dev:
+	@echo "🚀 LazyChef Full Stack Development Mode"
+	@echo "Starting backend and frontend servers..."
+	@echo "📋 Backend: http://localhost:8080"
+	@echo "🌐 Frontend: http://localhost:3000"
+	@echo ""
+	@echo "Press Ctrl+C to stop all services"
+	@($(MAKE) run &) && $(MAKE) frontend-dev
+
+## quickstart: Complete setup and start for PoC (Backend only)
+quickstart:
+	@echo "🚀 LazyChef QuickStart - Backend API Setup & Launch"
+	@echo "1. Checking environment..."
+	@if [ ! -f .env ]; then \
+		echo "Creating .env from template..."; \
+		cp .env.example .env; \
+		echo "⚠️  Please edit .env and set your OPENAI_API_KEY"; \
+		echo "⚠️  Then run 'make quickstart' again"; \
+		exit 1; \
+	fi
+	@echo "2. Installing dependencies..."
+	@$(MAKE) deps >/dev/null 2>&1 || echo "Dependencies installation completed"
+	@echo "3. Initializing database..."
+	@$(MAKE) init-db
+	@echo "4. Starting server..."
+	@echo "✅ Setup complete! Backend API server starting on http://localhost:8080"
+	@echo "📋 API Health: http://localhost:8080/api/health"
+	@echo "🎯 Admin Panel: http://localhost:8080/api/admin/health"
+	@echo ""
+	@echo "💡 For full GUI experience, run 'make quickstart-gui' instead"
+	@$(MAKE) run
+
+## quickstart-gui: Complete setup and start with GUI (Frontend + Backend)
+quickstart-gui:
+	@echo "🚀 LazyChef QuickStart - GUI版完全セットアップ & 起動"
+	@echo "1. Checking environment..."
+	@if [ ! -f .env ]; then \
+		echo "Creating .env from template..."; \
+		cp .env.example .env; \
+		echo "⚠️  Please edit .env and set your OPENAI_API_KEY"; \
+		echo "⚠️  Then run 'make quickstart-gui' again"; \
+		exit 1; \
+	fi
+	@echo "2. Installing backend dependencies..."
+	@$(MAKE) deps >/dev/null 2>&1 || echo "Backend dependencies installation completed"
+	@echo "3. Installing frontend dependencies..."
+	@$(MAKE) frontend-install >/dev/null 2>&1 || echo "Frontend dependencies installation completed"
+	@echo "4. Initializing database..."
+	@$(MAKE) init-db
+	@echo "5. Starting backend and frontend servers..."
+	@echo "✅ Setup complete! LazyChef starting with GUI"
+	@echo "🌐 Frontend GUI: http://localhost:3000"
+	@echo "📋 Backend API: http://localhost:8080"
+	@echo "🎯 Admin Panel: http://localhost:8080/api/admin/health"
+	@echo ""
+	@echo "Press Ctrl+C to stop all services"
+	@$(MAKE) fullstack-dev
+
+## poc-demo: Run PoC demonstration commands
+poc-demo:
+	@echo "🎯 LazyChef PoC Demonstration"
+	@echo "\n1. Health Check..."
+	@curl -s http://localhost:8080/api/health | jq '.' || echo "Server not running. Start with 'make quickstart'"
+	@echo "\n\n2. Basic Recipe Generation Demo..."
+	@curl -s -X POST http://localhost:8080/api/recipes/generate \
+		-H "Content-Type: application/json" \
+		-d '{"preferences": {"cooking_time": 10, "ingredients": ["卵"]}}' | jq '.data.title' || echo "Failed"
+	@echo "\n\n3. Admin System Health..."
+	@curl -s http://localhost:8080/api/admin/health | jq '.data.status' || echo "Admin not available"
+	@echo "\n\n4. Batch Jobs Status..."
+	@curl -s http://localhost:8080/api/admin/batch-generation/jobs | jq '.data.count' || echo "No batch jobs"
+	@echo "\n✅ PoC Demo Complete!"
+
+## reset-db: Reset database completely
+reset-db:
+	@echo "🗄️ Resetting database..."
+	@rm -f backend/data/recipes.db
+	@$(MAKE) init-db
+	@echo "✅ Database reset complete"
+
+## demo-data: Insert sample data for demonstration
+demo-data: reset-db
+	@echo "📝 Inserting demo data..."
+	@cd scripts && go run init_db.go
+	@echo "✅ Demo data inserted successfully"
 
 ## start: Quick start (alias for run)
 start: run
@@ -147,4 +252,15 @@ restart: clean build run
 
 ## logs: Show application logs (placeholder)
 logs:
-	@echo "Logs would be shown here in production environment"
+	@echo "📋 Application Logs:"
+	@if [ -f backend/lazychef.log ]; then tail -f backend/lazychef.log; else echo "No log file found. Starting server with 'make run' will create logs."; fi
+
+## logs-errors: Show only error logs
+logs-errors:
+	@echo "🚨 Error Logs:"
+	@if [ -f backend/lazychef.log ]; then grep -i error backend/lazychef.log | tail -20; else echo "No error logs found"; fi
+
+## logs-api: Show API access logs
+logs-api:
+	@echo "🌐 API Access Logs:"
+	@if [ -f backend/lazychef.log ]; then grep -E "(GET|POST|PUT|DELETE)" backend/lazychef.log | tail -20; else echo "No API logs found"; fi
