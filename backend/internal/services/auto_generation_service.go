@@ -16,6 +16,7 @@ type AutoGenerationService struct {
 	db               *database.Database
 	diversityService *DiversityService
 	generatorService *RecipeGeneratorService
+	qualityService   *RecipeQualityService
 }
 
 // DimensionCombination represents a specific combination of dimensions
@@ -66,10 +67,15 @@ type AutoGenerationRequest struct {
 
 // NewAutoGenerationService creates a new auto generation service
 func NewAutoGenerationService(db *database.Database, diversityService *DiversityService, generatorService *RecipeGeneratorService) *AutoGenerationService {
+	// Initialize quality service with nil embeddingDeduplicator for now
+	// In production, this should be properly initialized
+	qualityService := NewRecipeQualityService(db, diversityService, nil)
+
 	return &AutoGenerationService{
 		db:               db,
 		diversityService: diversityService,
 		generatorService: generatorService,
+		qualityService:   qualityService,
 	}
 }
 
@@ -351,6 +357,8 @@ type AutoGenerationResult struct {
 	TotalAttempts     int                    `json:"total_attempts"`
 	DimensionsCovered []DimensionCombination `json:"dimensions_covered"`
 	GenerationSummary map[string]int         `json:"generation_summary"`
+	QualityReport     *QualityReport         `json:"quality_report,omitempty"`
+	AverageQuality    float64                `json:"average_quality"`
 }
 
 // GenerateAutoRecipes generates recipes automatically based on coverage gaps
@@ -439,6 +447,24 @@ func (s *AutoGenerationService) GenerateAutoRecipes(ctx context.Context, req Aut
 		// Optional: Add small delay between generations to be respectful to API
 		if i < len(targetCombinations)-1 {
 			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	// Phase 3: Generate quality report if recipes were generated
+	if len(result.GeneratedRecipes) > 0 && s.qualityService != nil {
+		// Create dimension mappings for quality check
+		dimensionMappings := make(map[int][]DimensionCombination)
+		for i, recipe := range result.GeneratedRecipes {
+			if i < len(targetCombinations) {
+				dimensionMappings[recipe.ID] = []DimensionCombination{targetCombinations[i]}
+			}
+		}
+
+		// Generate quality report
+		qualityReport, err := s.qualityService.GenerateQualityReport(result.GeneratedRecipes, dimensionMappings)
+		if err == nil {
+			result.QualityReport = qualityReport
+			result.AverageQuality = qualityReport.AverageQuality
 		}
 	}
 
