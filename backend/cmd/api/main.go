@@ -184,6 +184,8 @@ func main() {
 			api.POST("/clear-cache", recipeHandler.ClearCache)
 			api.GET("/test", recipeHandler.TestRecipeGeneration)
 			api.GET("/search", recipeHandler.SearchRecipes)
+			api.GET("/ingredient-categories", recipeHandler.GetIngredientCategories)
+			api.GET("/test-ingredient-mapping", recipeHandler.TestIngredientMapping)
 
 			// Enhanced GPT-5 endpoints
 			api.POST("/generate-enhanced", recipeHandler.GenerateRecipeEnhanced)

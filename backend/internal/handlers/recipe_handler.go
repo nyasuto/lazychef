@@ -21,16 +21,19 @@ type RecipeHandler struct {
 	recipeRepository         *services.RecipeRepository
 	generatorService         *services.RecipeGeneratorService
 	enhancedGeneratorService *services.EnhancedRecipeGeneratorService
+	ingredientMapper         *services.SimpleIngredientMapper
 }
 
 // NewRecipeHandler creates a new recipe handler
 func NewRecipeHandler(db *database.Database, generatorService *services.RecipeGeneratorService, enhancedGeneratorService *services.EnhancedRecipeGeneratorService) *RecipeHandler {
 	recipeRepository := services.NewRecipeRepository(db)
+	ingredientMapper := services.NewSimpleIngredientMapper()
 	return &RecipeHandler{
 		db:                       db,
 		recipeRepository:         recipeRepository,
 		generatorService:         generatorService,
 		enhancedGeneratorService: enhancedGeneratorService,
+		ingredientMapper:         ingredientMapper,
 	}
 }
 
@@ -437,21 +440,40 @@ func (h *RecipeHandler) SearchRecipes(c *gin.Context) {
 		args = append(args, "%"+criteria.Tag+"%")
 	}
 
-	// Handle multiple ingredients - use EXISTS with json_each to search within ingredient objects
+	// Handle multiple ingredients - use synonym mapping for better matching
 	if len(criteria.Ingredients) > 0 {
-		for _, ingredient := range criteria.Ingredients {
-			query += ` AND EXISTS (
-				SELECT 1 FROM json_each(json_extract(data, '$.ingredients'))
-				WHERE json_extract(value, '$.name') LIKE ?
-			)`
-			args = append(args, "%"+ingredient+"%")
+		// Expand ingredients using synonym mapper (Issue #87 fix)
+		expandedIngredients := h.ingredientMapper.ExpandIngredientTerms(criteria.Ingredients)
+		fmt.Printf("[DEBUG] Original ingredients: %v, Expanded: %v\n", criteria.Ingredients, expandedIngredients)
+
+		if len(expandedIngredients) > 0 {
+			// Build OR conditions for all expanded ingredients
+			var orConditions []string
+			for _, ingredient := range expandedIngredients {
+				orConditions = append(orConditions, `EXISTS (
+					SELECT 1 FROM json_each(json_extract(data, '$.ingredients'))
+					WHERE json_extract(value, '$.name') = ?
+				)`)
+				args = append(args, ingredient)
+			}
+			query += ` AND (` + strings.Join(orConditions, " OR ") + `)`
 		}
 	} else if criteria.Ingredient != "" { // Backward compatibility
-		query += ` AND EXISTS (
-			SELECT 1 FROM json_each(json_extract(data, '$.ingredients'))
-			WHERE json_extract(value, '$.name') LIKE ?
-		)`
-		args = append(args, "%"+criteria.Ingredient+"%")
+		// Also apply synonym mapping to single ingredient searches
+		expandedIngredients := h.ingredientMapper.ExpandIngredientTerms([]string{criteria.Ingredient})
+		fmt.Printf("[DEBUG] Single ingredient '%s' expanded to: %v\n", criteria.Ingredient, expandedIngredients)
+
+		if len(expandedIngredients) > 0 {
+			var orConditions []string
+			for _, ingredient := range expandedIngredients {
+				orConditions = append(orConditions, `EXISTS (
+					SELECT 1 FROM json_each(json_extract(data, '$.ingredients'))
+					WHERE json_extract(value, '$.name') = ?
+				)`)
+				args = append(args, ingredient)
+			}
+			query += ` AND (` + strings.Join(orConditions, " OR ") + `)`
+		}
 	}
 
 	if criteria.MaxCookingTime > 0 {
@@ -547,21 +569,35 @@ func (h *RecipeHandler) SearchRecipes(c *gin.Context) {
 		countArgs = append(countArgs, "%"+criteria.Tag+"%")
 	}
 
-	// Handle multiple ingredients for count - use EXISTS with json_each to search within ingredient objects
+	// Handle multiple ingredients for count - use synonym mapping for better matching
 	if len(criteria.Ingredients) > 0 {
-		for _, ingredient := range criteria.Ingredients {
-			countQuery += ` AND EXISTS (
-				SELECT 1 FROM json_each(json_extract(data, '$.ingredients'))
-				WHERE json_extract(value, '$.name') LIKE ?
-			)`
-			countArgs = append(countArgs, "%"+ingredient+"%")
+		// Use same expanded ingredients as main query
+		expandedIngredients := h.ingredientMapper.ExpandIngredientTerms(criteria.Ingredients)
+		if len(expandedIngredients) > 0 {
+			var orConditions []string
+			for _, ingredient := range expandedIngredients {
+				orConditions = append(orConditions, `EXISTS (
+					SELECT 1 FROM json_each(json_extract(data, '$.ingredients'))
+					WHERE json_extract(value, '$.name') = ?
+				)`)
+				countArgs = append(countArgs, ingredient)
+			}
+			countQuery += ` AND (` + strings.Join(orConditions, " OR ") + `)`
 		}
 	} else if criteria.Ingredient != "" { // Backward compatibility
-		countQuery += ` AND EXISTS (
-			SELECT 1 FROM json_each(json_extract(data, '$.ingredients'))
-			WHERE json_extract(value, '$.name') LIKE ?
-		)`
-		countArgs = append(countArgs, "%"+criteria.Ingredient+"%")
+		// Use same expanded ingredients as main query
+		expandedIngredients := h.ingredientMapper.ExpandIngredientTerms([]string{criteria.Ingredient})
+		if len(expandedIngredients) > 0 {
+			var orConditions []string
+			for _, ingredient := range expandedIngredients {
+				orConditions = append(orConditions, `EXISTS (
+					SELECT 1 FROM json_each(json_extract(data, '$.ingredients'))
+					WHERE json_extract(value, '$.name') = ?
+				)`)
+				countArgs = append(countArgs, ingredient)
+			}
+			countQuery += ` AND (` + strings.Join(orConditions, " OR ") + `)`
+		}
 	}
 	if criteria.MaxCookingTime > 0 {
 		countQuery += ` AND cooking_time <= ?`
@@ -590,6 +626,52 @@ func (h *RecipeHandler) SearchRecipes(c *gin.Context) {
 			"limit":   criteria.Limit,
 			"offset":  criteria.Offset,
 			"page":    criteria.Page,
+		},
+	})
+}
+
+// GetIngredientCategories handles GET /api/recipes/ingredient-categories
+// Returns available ingredient categories for UI dropdown
+func (h *RecipeHandler) GetIngredientCategories(c *gin.Context) {
+	categories := h.ingredientMapper.GetSupportedCategories()
+
+	// Return both categories and their associated ingredients for debugging
+	categoryDetails := make(map[string]interface{})
+	for _, category := range categories {
+		ingredients := h.ingredientMapper.GetCategoryIngredients(category)
+		categoryDetails[category] = gin.H{
+			"display_name": category,
+			"ingredients":  ingredients,
+			"count":        len(ingredients),
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"categories": categories,
+			"details":    categoryDetails,
+		},
+	})
+}
+
+// TestIngredientMapping handles GET /api/recipes/test-ingredient-mapping
+// Test endpoint to verify ingredient synonym mapping is working
+func (h *RecipeHandler) TestIngredientMapping(c *gin.Context) {
+	searchTerm := c.Query("term")
+	if searchTerm == "" {
+		searchTerm = "鶏肉" // Default test term
+	}
+
+	expandedIngredients := h.ingredientMapper.ExpandIngredientTerms([]string{searchTerm})
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"search_term":          searchTerm,
+			"expanded_ingredients": expandedIngredients,
+			"expansion_count":      len(expandedIngredients),
+			"note":                 "This tests the ingredient synonym mapping system (Issue #87 fix)",
 		},
 	})
 }
