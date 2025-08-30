@@ -276,11 +276,12 @@ func main() {
 				diversityAPI.POST("/dimension-weights", adminHandler.UpdateDimensionWeights)
 			}
 
-			// Auto generation endpoints (Issue #76 - Phase 1)
+			// Auto generation endpoints (Issue #76 - Phase 1 & Phase 4)
 			autoGenAPI := adminAPI.Group("/auto-generation")
 			{
 				autoGenAPI.GET("/coverage", adminHandler.GetCoverageAnalysis)
 				autoGenAPI.POST("/generate", adminHandler.GenerateAutoRecipes)
+				autoGenAPI.POST("/batch-generate", adminHandler.BatchAutoGenerateRecipes)
 			}
 
 			// System health
