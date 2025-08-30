@@ -46,15 +46,19 @@ type MealPlanPreferences struct {
 
 // SearchCriteria represents recipe search criteria
 type SearchCriteria struct {
-	Query            string  `json:"query" form:"query"` // General search query (title, ingredient)
-	Tag              string  `json:"tag" form:"tag"`
-	Ingredient       string  `json:"ingredient" form:"ingredient"`
-	MaxCookingTime   int     `json:"max_cooking_time" form:"max_cooking_time"`
-	MinLazinessScore float64 `json:"min_laziness_score" form:"min_laziness_score"`
-	Season           string  `json:"season" form:"season"`
-	Limit            int     `json:"limit" form:"limit"`
-	Offset           int     `json:"offset" form:"offset"`
-	Page             int     `json:"page" form:"page"` // Page number (alternative to offset)
+	Query            string   `json:"query" form:"query"` // General search query (title, ingredient)
+	Tags             []string `json:"tags" form:"tags"`
+	Ingredients      []string `json:"ingredients" form:"ingredients"`
+	MaxCookingTime   int      `json:"max_cooking_time" form:"max_cooking_time"`
+	MinLazinessScore float64  `json:"min_laziness_score" form:"min_laziness_score"`
+	Season           string   `json:"season" form:"season"`
+	Limit            int      `json:"limit" form:"limit"`
+	Offset           int      `json:"offset" form:"offset"`
+	Page             int      `json:"page" form:"page"` // Page number (alternative to offset)
+
+	// Legacy fields for backward compatibility
+	Tag        string `json:"tag" form:"tag"`
+	Ingredient string `json:"ingredient" form:"ingredient"`
 }
 
 // MealPlanData holds the JSON-stored meal plan information

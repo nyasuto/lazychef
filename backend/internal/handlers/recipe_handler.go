@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -357,6 +359,9 @@ func (h *RecipeHandler) TestRecipeGeneration(c *gin.Context) {
 func (h *RecipeHandler) SearchRecipes(c *gin.Context) {
 	var criteria models.SearchCriteria
 
+	// Debug: Log all query parameters
+	fmt.Printf("[DEBUG] Raw query parameters: %+v\n", c.Request.URL.Query())
+
 	// Bind query parameters
 	if err := c.ShouldBindQuery(&criteria); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -365,6 +370,30 @@ func (h *RecipeHandler) SearchRecipes(c *gin.Context) {
 		})
 		return
 	}
+
+	// Debug: Log bound criteria
+	fmt.Printf("[DEBUG] Bound criteria: %+v\n", criteria)
+
+	// Handle comma-separated ingredients from frontend
+	if ingredientsParam := c.Query("ingredients"); ingredientsParam != "" && len(criteria.Ingredients) == 0 {
+		criteria.Ingredients = strings.Split(strings.TrimSpace(ingredientsParam), ",")
+		// Clean up each ingredient
+		for i, ingredient := range criteria.Ingredients {
+			criteria.Ingredients[i] = strings.TrimSpace(ingredient)
+		}
+	}
+
+	// Handle comma-separated tags from frontend
+	if tagsParam := c.Query("tags"); tagsParam != "" && len(criteria.Tags) == 0 {
+		criteria.Tags = strings.Split(strings.TrimSpace(tagsParam), ",")
+		// Clean up each tag
+		for i, tag := range criteria.Tags {
+			criteria.Tags[i] = strings.TrimSpace(tag)
+		}
+	}
+
+	// Debug: Log criteria after comma-separated processing
+	fmt.Printf("[DEBUG] Processed criteria: %+v\n", criteria)
 
 	// Set defaults and validate
 	if criteria.Limit <= 0 || criteria.Limit > 100 {
@@ -397,13 +426,31 @@ func (h *RecipeHandler) SearchRecipes(c *gin.Context) {
 		args = append(args, searchTerm, searchTerm)
 	}
 
-	if criteria.Tag != "" {
+	// Handle multiple tags
+	if len(criteria.Tags) > 0 {
+		for _, tag := range criteria.Tags {
+			query += ` AND json_extract(data, '$.tags') LIKE ?`
+			args = append(args, "%"+tag+"%")
+		}
+	} else if criteria.Tag != "" { // Backward compatibility
 		query += ` AND json_extract(data, '$.tags') LIKE ?`
 		args = append(args, "%"+criteria.Tag+"%")
 	}
 
-	if criteria.Ingredient != "" {
-		query += ` AND json_extract(data, '$.ingredients') LIKE ?`
+	// Handle multiple ingredients - use EXISTS with json_each to search within ingredient objects
+	if len(criteria.Ingredients) > 0 {
+		for _, ingredient := range criteria.Ingredients {
+			query += ` AND EXISTS (
+				SELECT 1 FROM json_each(json_extract(data, '$.ingredients'))
+				WHERE json_extract(value, '$.name') LIKE ?
+			)`
+			args = append(args, "%"+ingredient+"%")
+		}
+	} else if criteria.Ingredient != "" { // Backward compatibility
+		query += ` AND EXISTS (
+			SELECT 1 FROM json_each(json_extract(data, '$.ingredients'))
+			WHERE json_extract(value, '$.name') LIKE ?
+		)`
 		args = append(args, "%"+criteria.Ingredient+"%")
 	}
 
@@ -488,12 +535,32 @@ func (h *RecipeHandler) SearchRecipes(c *gin.Context) {
 		searchTerm := "%" + criteria.Query + "%"
 		countArgs = append(countArgs, searchTerm, searchTerm)
 	}
-	if criteria.Tag != "" {
+
+	// Handle multiple tags for count
+	if len(criteria.Tags) > 0 {
+		for _, tag := range criteria.Tags {
+			countQuery += ` AND json_extract(data, '$.tags') LIKE ?`
+			countArgs = append(countArgs, "%"+tag+"%")
+		}
+	} else if criteria.Tag != "" { // Backward compatibility
 		countQuery += ` AND json_extract(data, '$.tags') LIKE ?`
 		countArgs = append(countArgs, "%"+criteria.Tag+"%")
 	}
-	if criteria.Ingredient != "" {
-		countQuery += ` AND json_extract(data, '$.ingredients') LIKE ?`
+
+	// Handle multiple ingredients for count - use EXISTS with json_each to search within ingredient objects
+	if len(criteria.Ingredients) > 0 {
+		for _, ingredient := range criteria.Ingredients {
+			countQuery += ` AND EXISTS (
+				SELECT 1 FROM json_each(json_extract(data, '$.ingredients'))
+				WHERE json_extract(value, '$.name') LIKE ?
+			)`
+			countArgs = append(countArgs, "%"+ingredient+"%")
+		}
+	} else if criteria.Ingredient != "" { // Backward compatibility
+		countQuery += ` AND EXISTS (
+			SELECT 1 FROM json_each(json_extract(data, '$.ingredients'))
+			WHERE json_extract(value, '$.name') LIKE ?
+		)`
 		countArgs = append(countArgs, "%"+criteria.Ingredient+"%")
 	}
 	if criteria.MaxCookingTime > 0 {
