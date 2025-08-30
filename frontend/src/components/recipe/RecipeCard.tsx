@@ -56,14 +56,17 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onClick }) => {
       <div className="mb-3">
         <p className="text-sm text-gray-600 mb-1">材料:</p>
         <div className="flex flex-wrap gap-1">
-          {recipe.ingredients.slice(0, 4).map((ingredient, index) => (
-            <span 
-              key={index}
-              className="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs"
-            >
-              {typeof ingredient === 'string' ? ingredient : ingredient.name}
-            </span>
-          ))}
+          {recipe.ingredients.slice(0, 4).map((ingredient, index) => {
+            const ingredientName = typeof ingredient === 'string' ? ingredient : ingredient.name;
+            return (
+              <span 
+                key={`${recipe.id}-ingredient-${ingredientName}-${index}`}
+                className="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs"
+              >
+                {ingredientName}
+              </span>
+            );
+          })}
           {recipe.ingredients.length > 4 && (
             <span className="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
               +{recipe.ingredients.length - 4}種類
@@ -104,7 +107,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onClick }) => {
               <>
                 {displayTags.map((tag, index) => (
                   <span 
-                    key={index}
+                    key={`${recipe.id}-tag-${tag}-${index}`}
                     className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
                       mealTypeCategories.includes(tag) 
                         ? 'bg-purple-100 text-purple-800 border border-purple-200' 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import RecipeSearch from '../components/recipe/RecipeSearch';
 import RecipeCard from '../components/recipe/RecipeCard';
 import RecipeDetailModal from '../components/recipe/RecipeDetailModal';
@@ -25,11 +25,11 @@ const RecipeListPage: React.FC = () => {
   const recipesPerPage = 12;
   const totalPages = Math.ceil(total / recipesPerPage);
 
-  const handleSearch = async (filters: SearchFilters) => {
+  const handleSearch = useCallback(async (filters: SearchFilters) => {
     setCurrentFilters(filters);
     setCurrentPage(1);
     await searchRecipes(filters, 1);
-  };
+  }, [searchRecipes]);
 
   const handlePageChange = async (page: number) => {
     setCurrentPage(page);

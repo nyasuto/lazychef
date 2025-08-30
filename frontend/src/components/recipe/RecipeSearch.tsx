@@ -60,7 +60,7 @@ const RecipeSearch: React.FC<RecipeSearchProps> = ({ onSearch, loading = false }
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [filters]); // onSearchを依存関係から除去して無限ループを防止
+  }, [filters, onSearch]);
 
   // リアルタイム検索のためsubmitハンドラーは不要（useEffectで自動実行）
 
