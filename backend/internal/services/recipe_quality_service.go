@@ -153,7 +153,7 @@ func (s *RecipeQualityService) assessCompleteness(recipe *models.RecipeData, sco
 	}
 
 	// Check steps
-	if len(recipe.Steps) == 0 {
+	if len([]string(recipe.Steps)) == 0 {
 		score.QualityIssues = append(score.QualityIssues, QualityIssue{
 			Severity:    "critical",
 			Category:    "completeness",
@@ -161,12 +161,12 @@ func (s *RecipeQualityService) assessCompleteness(recipe *models.RecipeData, sco
 			Impact:      30.0,
 		})
 		completenessScore -= 30.0
-	} else if len(recipe.Steps) > 3 {
+	} else if len([]string(recipe.Steps)) > 3 {
 		// LazyChef requirement: maximum 3 steps
 		score.QualityIssues = append(score.QualityIssues, QualityIssue{
 			Severity:    "major",
 			Category:    "completeness",
-			Description: fmt.Sprintf("Too many steps (%d) for lazy cooking", len(recipe.Steps)),
+			Description: fmt.Sprintf("Too many steps (%d) for lazy cooking", len([]string(recipe.Steps))),
 			Impact:      20.0,
 		})
 		completenessScore -= 20.0
@@ -193,7 +193,7 @@ func (s *RecipeQualityService) assessConsistency(recipe *models.RecipeData, scor
 	// Check if ingredients mentioned in steps
 	for _, ingredient := range recipe.Ingredients {
 		mentioned := false
-		for _, step := range recipe.Steps {
+		for _, step := range []string(recipe.Steps) {
 			if strings.Contains(strings.ToLower(step), strings.ToLower(ingredient.Name)) {
 				mentioned = true
 				break
@@ -211,7 +211,7 @@ func (s *RecipeQualityService) assessConsistency(recipe *models.RecipeData, scor
 	}
 
 	// Check cooking time vs steps complexity
-	estimatedTime := len(recipe.Steps) * 5 // Rough estimate: 5 min per step
+	estimatedTime := len([]string(recipe.Steps)) * 5 // Rough estimate: 5 min per step
 	if recipe.CookingTime > 0 {
 		timeDifference := math.Abs(float64(recipe.CookingTime - estimatedTime))
 		if timeDifference > 10 {
@@ -226,7 +226,7 @@ func (s *RecipeQualityService) assessConsistency(recipe *models.RecipeData, scor
 	}
 
 	// Check laziness score consistency
-	if recipe.LazinessScore > 8 && len(recipe.Steps) > 2 {
+	if recipe.LazinessScore > 8 && len([]string(recipe.Steps)) > 2 {
 		score.QualityIssues = append(score.QualityIssues, QualityIssue{
 			Severity:    "minor",
 			Category:    "consistency",
@@ -272,7 +272,7 @@ func (s *RecipeQualityService) assessFeasibility(recipe *models.RecipeData, scor
 	}
 
 	// Check step complexity
-	for _, step := range recipe.Steps {
+	for _, step := range []string(recipe.Steps) {
 		if len(step) > 200 {
 			score.QualityIssues = append(score.QualityIssues, QualityIssue{
 				Severity:    "minor",
@@ -356,7 +356,7 @@ func (s *RecipeQualityService) assessLazinessAccuracy(recipe *models.RecipeData,
 	}
 
 	// Reduce based on steps
-	expectedScore -= float64(len(recipe.Steps)-1) * 1.5
+	expectedScore -= float64(len([]string(recipe.Steps))-1) * 1.5
 
 	// Reduce based on ingredients
 	if len(recipe.Ingredients) > 5 {
@@ -413,7 +413,7 @@ func (s *RecipeQualityService) checkMealTypeAlignment(recipe *models.RecipeData,
 			if strings.Contains(recipe.Title, keyword) {
 				alignmentScore += 30.0
 			}
-			for _, step := range recipe.Steps {
+			for _, step := range []string(recipe.Steps) {
 				if strings.Contains(step, keyword) {
 					alignmentScore += 10.0
 					break
@@ -450,7 +450,7 @@ func (s *RecipeQualityService) checkCookingMethodAlignment(recipe *models.Recipe
 	alignmentScore := 0.0
 	methodLower := strings.ToLower(method)
 
-	for _, step := range recipe.Steps {
+	for _, step := range []string(recipe.Steps) {
 		if strings.Contains(strings.ToLower(step), methodLower) {
 			alignmentScore = 100.0
 			break
@@ -468,7 +468,7 @@ func (s *RecipeQualityService) checkCookingMethodAlignment(recipe *models.Recipe
 
 	if related, exists := relatedMethods[method]; exists {
 		for _, keyword := range related {
-			for _, step := range recipe.Steps {
+			for _, step := range []string(recipe.Steps) {
 				if strings.Contains(strings.ToLower(step), strings.ToLower(keyword)) {
 					alignmentScore = math.Max(alignmentScore, 70.0)
 				}

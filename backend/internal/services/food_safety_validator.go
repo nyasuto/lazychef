@@ -77,7 +77,7 @@ func (v *FoodSafetyValidator) ValidateRecipe(recipe *models.RecipeData) (*Safety
 
 // checkDangerousPatterns checks for dangerous cooking patterns
 func (v *FoodSafetyValidator) checkDangerousPatterns(recipe *models.RecipeData, result *SafetyCheckResult) {
-	allText := strings.ToLower(recipe.Title + " " + strings.Join(recipe.Steps, " "))
+	allText := strings.ToLower(recipe.Title + " " + strings.Join([]string(recipe.Steps), " "))
 
 	for _, pattern := range v.dangerousPatterns {
 		if matched, _ := regexp.MatchString(pattern, allText); matched {
@@ -89,7 +89,7 @@ func (v *FoodSafetyValidator) checkDangerousPatterns(recipe *models.RecipeData, 
 // checkTemperatureRequirements validates cooking temperatures
 func (v *FoodSafetyValidator) checkTemperatureRequirements(recipe *models.RecipeData, result *SafetyCheckResult) {
 	tempRegex := regexp.MustCompile(`(\d+)°?[fF]`)
-	stepsText := strings.ToLower(strings.Join(recipe.Steps, " "))
+	stepsText := strings.ToLower(strings.Join([]string(recipe.Steps), " "))
 
 	for _, ingredient := range recipe.Ingredients {
 		ingredientName := strings.ToLower(ingredient.Name)
@@ -141,7 +141,7 @@ func (v *FoodSafetyValidator) checkAllergenRequirements(recipe *models.RecipeDat
 
 // checkRawIngredientHandling checks for proper raw ingredient handling
 func (v *FoodSafetyValidator) checkRawIngredientHandling(recipe *models.RecipeData, result *SafetyCheckResult) {
-	stepsText := strings.ToLower(strings.Join(recipe.Steps, " "))
+	stepsText := strings.ToLower(strings.Join([]string(recipe.Steps), " "))
 
 	rawIngredients := []string{"raw chicken", "raw beef", "raw pork", "raw fish", "raw egg"}
 

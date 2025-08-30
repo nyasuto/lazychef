@@ -2,12 +2,94 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
+	"sort"
 	"strconv"
 	"time"
 )
 
 // FlexibleInt is a type that can be unmarshaled from both string and int
 type FlexibleInt int
+
+// FlexibleSteps is a type that can be unmarshaled from both array and object formats
+type FlexibleSteps []string
+
+// UnmarshalJSON implements json.Unmarshaler for FlexibleSteps
+func (fs *FlexibleSteps) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as string array first (expected format)
+	var arraySteps []string
+	if err := json.Unmarshal(data, &arraySteps); err == nil {
+		*fs = FlexibleSteps(arraySteps)
+		return nil
+	}
+
+	// Try to unmarshal as object array (OpenAI API sometimes returns this)
+	var objArraySteps []map[string]interface{}
+	if err := json.Unmarshal(data, &objArraySteps); err == nil {
+		steps := make([]string, len(objArraySteps))
+		for i, stepObj := range objArraySteps {
+			// Try to extract "instruction" field first
+			if instruction, ok := stepObj["instruction"]; ok {
+				if instrStr, ok := instruction.(string); ok {
+					steps[i] = instrStr
+					continue
+				}
+			}
+			// Fallback: try to find any string field
+			for key, value := range stepObj {
+				if strValue, ok := value.(string); ok && key != "description" && key != "effort_level" {
+					steps[i] = strValue
+					break
+				}
+			}
+		}
+		*fs = FlexibleSteps(steps)
+		return nil
+	}
+
+	// Try to unmarshal as object with step keys (OpenAI API format)
+	var objSteps map[string]interface{}
+	if err := json.Unmarshal(data, &objSteps); err == nil {
+		steps := make([]string, 0, len(objSteps))
+
+		// Try numbered step format: {"step1": "...", "step2": "...", ...}
+		stepNumbers := make([]int, 0, len(objSteps))
+		stepMap := make(map[int]string)
+
+		for key, value := range objSteps {
+			if strValue, ok := value.(string); ok {
+				var stepNum int
+				if n, err := fmt.Sscanf(key, "step%d", &stepNum); n == 1 && err == nil {
+					stepNumbers = append(stepNumbers, stepNum)
+					stepMap[stepNum] = strValue
+				} else {
+					// Fallback: treat any key as a step
+					steps = append(steps, strValue)
+				}
+			}
+		}
+
+		// If we found numbered steps, use them in order
+		if len(stepMap) > 0 {
+			sort.Ints(stepNumbers)
+			for _, num := range stepNumbers {
+				steps = append(steps, stepMap[num])
+			}
+		}
+
+		*fs = FlexibleSteps(steps)
+		return nil
+	}
+
+	// Try to unmarshal as single string (fallback)
+	var singleStep string
+	if err := json.Unmarshal(data, &singleStep); err == nil {
+		*fs = FlexibleSteps([]string{singleStep})
+		return nil
+	}
+
+	return fmt.Errorf("cannot unmarshal steps field: expected array, object, or string")
+}
 
 // UnmarshalJSON implements json.Unmarshaler for FlexibleInt
 func (fi *FlexibleInt) UnmarshalJSON(data []byte) error {
@@ -67,7 +149,7 @@ type RecipeData struct {
 	Title         string         `json:"title" binding:"required"`
 	CookingTime   int            `json:"cooking_time" binding:"required,min=1"`
 	Ingredients   []Ingredient   `json:"ingredients" binding:"required,min=1"`
-	Steps         []string       `json:"steps" binding:"required,min=1"`
+	Steps         FlexibleSteps  `json:"steps" binding:"required,min=1"`
 	Tags          []string       `json:"tags"`
 	Season        string         `json:"season" binding:"required,oneof=spring summer fall winter all"`
 	LazinessScore float64        `json:"laziness_score" binding:"required,min=1.0,max=10.0"`

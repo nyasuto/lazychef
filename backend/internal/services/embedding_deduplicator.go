@@ -330,7 +330,7 @@ func (d *EmbeddingDeduplicator) recipeToText(recipe *models.RecipeData) string {
 	parts = append(parts, fmt.Sprintf("Ingredients: %s", strings.Join(ingredientNames, ", ")))
 
 	// Steps
-	parts = append(parts, fmt.Sprintf("Steps: %s", strings.Join(recipe.Steps, " ")))
+	parts = append(parts, fmt.Sprintf("Steps: %s", strings.Join([]string(recipe.Steps), " ")))
 
 	// Tags and season
 	if len(recipe.Tags) > 0 {
@@ -344,7 +344,7 @@ func (d *EmbeddingDeduplicator) recipeToText(recipe *models.RecipeData) string {
 func (d *EmbeddingDeduplicator) generateContentHash(recipe *models.RecipeData) string {
 	// Create deterministic hash of recipe content
 	content := fmt.Sprintf("%s|%v|%v|%v|%s",
-		recipe.Title, recipe.Ingredients, recipe.Steps, recipe.Tags, recipe.Season)
+		recipe.Title, recipe.Ingredients, []string(recipe.Steps), recipe.Tags, recipe.Season)
 
 	hash := sha256.Sum256([]byte(content))
 	return fmt.Sprintf("%x", hash)

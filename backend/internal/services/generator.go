@@ -300,7 +300,53 @@ func (s *RecipeGeneratorService) callOpenAIForRecipe(ctx context.Context, prompt
 		return nil, resp.Usage.TotalTokens, fmt.Errorf("failed to parse recipe JSON: %w", err)
 	}
 
+	// Fix OpenAI API inconsistencies
+	if err := s.fixRecipeInconsistencies(&recipe, content); err != nil {
+		return nil, resp.Usage.TotalTokens, fmt.Errorf("failed to fix recipe inconsistencies: %w", err)
+	}
+
 	return &recipe, resp.Usage.TotalTokens, nil
+}
+
+// fixRecipeInconsistencies fixes common OpenAI API response inconsistencies
+func (s *RecipeGeneratorService) fixRecipeInconsistencies(recipe *models.RecipeData, rawContent string) error {
+	// Parse raw JSON to extract missing fields
+	var rawData map[string]interface{}
+	if err := json.Unmarshal([]byte(rawContent), &rawData); err != nil {
+		return err
+	}
+
+	// Fix cooking_time if missing but active_time or total_time present
+	if recipe.CookingTime == 0 {
+		if activeTime, ok := rawData["active_time"].(float64); ok {
+			recipe.CookingTime = int(activeTime)
+		} else if totalTime, ok := rawData["total_time"].(float64); ok {
+			recipe.CookingTime = int(totalTime)
+		}
+	}
+
+	// Fix laziness_score if in wrong range (OpenAI sometimes returns 0-100 instead of 1-10)
+	if recipe.LazinessScore > 10.0 {
+		recipe.LazinessScore = recipe.LazinessScore / 10.0
+		if recipe.LazinessScore > 10.0 {
+			recipe.LazinessScore = 10.0
+		}
+		if recipe.LazinessScore < 1.0 {
+			recipe.LazinessScore = 1.0
+		}
+	}
+
+	// Fix season field mapping
+	if recipe.Season == "オールシーズン" || recipe.Season == "all_seasons" {
+		recipe.Season = "all"
+	}
+
+	// Ensure serving_size has a default value
+	if recipe.ServingSize.Int() <= 0 {
+		recipe.ServingSize = models.FlexibleInt(1)
+	}
+
+	return nil
 }
 
 // callOpenAIForBatchRecipes makes the actual API call for batch recipes

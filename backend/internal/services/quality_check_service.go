@@ -82,7 +82,7 @@ func (q *QualityCheckService) ValidateRecipe(recipe *models.RecipeData) (*Qualit
 // calculateFeasibilityScore checks tool/temperature/time consistency
 func (q *QualityCheckService) calculateFeasibilityScore(recipe *models.RecipeData, result *QualityCheckResult) float64 {
 	score := 1.0
-	stepsText := strings.ToLower(strings.Join(recipe.Steps, " "))
+	stepsText := strings.ToLower(strings.Join([]string(recipe.Steps), " "))
 
 	// Check for impossible time constraints
 	if recipe.CookingTime < 3 && strings.Contains(stepsText, "bake") {
@@ -128,13 +128,13 @@ func (q *QualityCheckService) calculateReadabilityScore(recipe *models.RecipeDat
 	score := 1.0
 
 	// Check step count (LazyChef constraint: max 3 steps)
-	if len(recipe.Steps) > 3 {
-		result.Violations = append(result.Violations, fmt.Sprintf("Too many steps (%d) - LazyChef requires ≤3", len(recipe.Steps)))
+	if len([]string(recipe.Steps)) > 3 {
+		result.Violations = append(result.Violations, fmt.Sprintf("Too many steps (%d) - LazyChef requires ≤3", len([]string(recipe.Steps))))
 		score -= 0.4
 	}
 
 	// Check individual step length
-	for i, step := range recipe.Steps {
+	for i, step := range []string(recipe.Steps) {
 		if len(step) > 200 {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("Step %d is quite long (%d chars) - consider simplifying", i+1, len(step)))
 			score -= 0.1
@@ -211,7 +211,7 @@ func (q *QualityCheckService) calculatePantryFriendlinessScore(recipe *models.Re
 // calculateLazyChefComplianceScore evaluates adherence to lazy cooking principles
 func (q *QualityCheckService) calculateLazyChefComplianceScore(recipe *models.RecipeData, result *QualityCheckResult) float64 {
 	score := 1.0
-	stepsText := strings.ToLower(strings.Join(recipe.Steps, " "))
+	stepsText := strings.ToLower(strings.Join([]string(recipe.Steps), " "))
 
 	// Check cooking time (preferred ≤15 minutes)
 	if recipe.CookingTime > 15 {
@@ -259,7 +259,7 @@ func (q *QualityCheckService) calculateLazyChefComplianceScore(recipe *models.Re
 // calculateTimeRealismScore evaluates realistic cooking time estimates
 func (q *QualityCheckService) calculateTimeRealismScore(recipe *models.RecipeData, result *QualityCheckResult) float64 {
 	score := 1.0
-	stepsText := strings.ToLower(strings.Join(recipe.Steps, " "))
+	stepsText := strings.ToLower(strings.Join([]string(recipe.Steps), " "))
 
 	// Extract any time mentions from steps
 	timeRegex := regexp.MustCompile(`(\d+)\s*(?:min|minute|hour|hr)`)
@@ -397,7 +397,7 @@ func (q *QualityCheckService) generateImprovementSuggestions(recipe *models.Reci
 		suggestions = append(suggestions, "Check temperature and timing consistency")
 	}
 
-	if len(recipe.Steps) > 3 {
+	if len([]string(recipe.Steps)) > 3 {
 		suggestions = append(suggestions, "Combine or eliminate steps to meet 3-step maximum")
 	}
 

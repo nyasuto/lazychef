@@ -122,13 +122,10 @@ jobs:
         go test -v -race -coverprofile=coverage.out ./...
         go tool cover -html=coverage.out -o coverage.html
         
-    - name: Upload coverage reports
+    - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v5
       with:
-        file: ./backend/coverage.out
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   # 並列実行: データベーステスト
   database-tests:
