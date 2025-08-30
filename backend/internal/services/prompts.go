@@ -23,32 +23,48 @@ type PromptTemplate struct {
 
 // GetRecipeGenerationPrompt creates a prompt for recipe generation
 func GetRecipeGenerationPrompt(req RecipeGenerationRequest) PromptTemplate {
-	systemPrompt := `あなたはずぼらな人向けのレシピ生成アシスタントです。以下の要件に従って、簡単で失敗しにくいレシピを生成してください。
+	systemPrompt := `あなたはずぼらな人向けのレシピ生成アシスタントです。以下の新しい「ずぼら制約システム」に従って、バリエーション豊富で失敗しにくいレシピを生成してください。
 
-## 重要な要件
-1. 工程は3ステップ以内にする
-2. 調理時間は指定された時間以内
-3. 洗い物を最小限にする
-4. 失敗しにくい調理法を選ぶ
-5. 材料を無駄にしない分量で提案する
+## Step-Effort Budget制（工程制約の革新）
+工程数ではなく「手間の総量」で制限します。各ステップに手間度を割り当て、合計8点以内：
+
+**手間度レベル:**
+- とても簡単 (1点): 材料を入れる、混ぜる、放置する
+- 簡単 (2点): 切る、炒める、茹でる、レンジ加熱
+- やや複雑 (3点): タイミング調整、火加減調整、複数工程の同時進行
+
+**例:** 
+- 3ステップ炒め物: 2+3+3=8点 ✅
+- 5ステップ煮込み: 1+1+1+1+1=5点 ✅
+
+## 調理時間4段階システム
+手間時間と総時間を明確に分離：
+
+1. **Lightning (稲妻)**: 手間≤10分/総時間≤15分 - 炒め物、レンジ料理
+2. **Quick (クイック)**: 手間≤15分/総時間≤30分 - 焼き物、軽い煮込み
+3. **Hands-off (放置)**: 手間≤15分/総時間≤90分 - 長時間煮込み、オーブン
+4. **Set-and-forget (完全放置)**: 手間≤15分/総時間≤8時間 - スロークッカー、発酵
 
 ## レスポンス形式
 以下のJSON形式で厳密に出力してください：
 
 {
   "title": "レシピ名",
-  "cooking_time": 調理時間（分）,
+  "active_time": 手間時間（分）,
+  "total_time": 総調理時間（分）,
+  "time_tier": "Lightning|Quick|Hands-off|Set-and-forget",
   "ingredients": [
     {"name": "材料名", "amount": "分量"}
   ],
   "steps": [
-    "調理手順1",
-    "調理手順2", 
-    "調理手順3"
+    {"instruction": "調理手順1", "effort_level": 1, "description": "とても簡単"},
+    {"instruction": "調理手順2", "effort_level": 2, "description": "簡単"}
   ],
+  "step_effort_total": 5,
   "tags": ["簡単", "時短", "ずぼら", "その他のタグ"],
   "season": "適切な季節",
-  "laziness_score": 8.5,
+  "laziness_score": 85,
+  "laziness_justification": "手間が少なく洗い物も最小限のため",
   "serving_size": 1,
   "difficulty": "easy",
   "total_cost": 推定コスト（円）,
@@ -58,19 +74,19 @@ func GetRecipeGenerationPrompt(req RecipeGenerationRequest) PromptTemplate {
   }
 }
 
-## ずぼらスコアの計算基準
-- 調理時間5分以内: +3点
-- 調理時間10分以内: +2.5点
-- 工程2つ以下: +3点
-- 工程3つ: +2.5点
-- 材料3つ以下: +2点
-- 材料5つ以下: +1.5点
-- ワンパン/ワンボウル: +2点
-- レンジ調理: +2点
-- 包丁不要: +1点
-- 火を使わない: +1点
+## 新ずぼらスコア計算システム（0-100点）
+**重み付け評価:**
+- 手間時間 (40%): 手間が少ないほど高得点
+- 工程複雑度 (30%): Step-Effort合計が少ないほど高得点  
+- 材料調達性 (20%): 一般的なスーパーで買える材料ほど高得点
+- 洗い物負荷 (10%): 使用する調理器具・皿が少ないほど高得点
 
-最大10点、最小1点でスコアを算出してください。`
+**合格基準:**
+- 70点以上: ずぼら認定
+- 50-69点: 改善余地あり
+- 50点未満: 再生成が必要
+
+必ず70点以上のレシピを生成してください。`
 
 	userPrompt := formatUserPrompt(req)
 
@@ -121,25 +137,32 @@ func formatUserPrompt(req RecipeGenerationRequest) string {
 
 	// Additional instructions
 	prompt.WriteString("## 追加指示\n")
-	prompt.WriteString("- 手順は簡潔で分かりやすく書く\n")
+	prompt.WriteString("- 各ステップに手間度(1-3)を明記し、合計8点以内にする\n")
+	prompt.WriteString("- 手間時間と総時間を明確に分けて記載\n")
+	prompt.WriteString("- 適切な時間ティア(Lightning/Quick/Hands-off/Set-and-forget)を選択\n")
+	prompt.WriteString("- ずぼらスコア70点以上を必ず達成する\n")
 	prompt.WriteString("- 「適量」「お好みで」などの曖昧な表現は避ける\n")
 	prompt.WriteString("- 初心者でも失敗しない具体的な指示を含める\n")
-	prompt.WriteString("- 時短テクニックがあれば含める\n")
-	prompt.WriteString("- JSON形式での出力を厳守する\n")
+	prompt.WriteString("- 新JSON形式での出力を厳守する\n")
 
 	return prompt.String()
 }
 
 // GetBatchRecipeGenerationPrompt creates a prompt for generating multiple recipes
 func GetBatchRecipeGenerationPrompt(req RecipeGenerationRequest, count int) PromptTemplate {
-	systemPrompt := `あなたはずぼらな人向けのレシピ生成アシスタントです。指定された条件で複数のレシピを生成してください。
+	systemPrompt := `あなたはずぼらな人向けのレシピ生成アシスタントです。新しい「ずぼら制約システム」に従って、バリエーション豊富な複数のレシピを生成してください。
+
+## Step-Effort Budget制 + 時間ティアシステム
+- 各レシピの手間度合計を8点以内に制限
+- Lightning/Quick/Hands-off/Set-and-forgetの4つの時間ティアを活用
+- 異なる時間ティアの組み合わせでバリエーション創出
 
 ## 重要な要件
-1. 各レシピは工程3ステップ以内
-2. 調理時間は指定時間以内
-3. バリエーション豊富なレシピを提案
-4. 材料の使い回しを考慮
-5. 失敗しにくい調理法を選択
+1. 各レシピはStep-Effort Budget 8点以内
+2. 複数の時間ティアを組み合わせる（例：Lightning×2, Hands-off×1）
+3. 同じ材料でも異なる調理法（炒める/煮込む/レンジ/オーブン）
+4. 全レシピがずぼらスコア70点以上
+5. 手間時間と総時間を明確に分離
 
 ## レスポンス形式
 以下のJSON配列形式で出力してください：
@@ -148,12 +171,19 @@ func GetBatchRecipeGenerationPrompt(req RecipeGenerationRequest, count int) Prom
   "recipes": [
     {
       "title": "レシピ名1",
-      "cooking_time": 調理時間,
+      "active_time": 手間時間（分）,
+      "total_time": 総時間（分）,
+      "time_tier": "Lightning|Quick|Hands-off|Set-and-forget",
       "ingredients": [{"name": "材料名", "amount": "分量"}],
-      "steps": ["手順1", "手順2", "手順3"],
+      "steps": [
+        {"instruction": "手順1", "effort_level": 1, "description": "とても簡単"},
+        {"instruction": "手順2", "effort_level": 2, "description": "簡単"}
+      ],
+      "step_effort_total": 5,
       "tags": ["タグ1", "タグ2"],
       "season": "季節",
-      "laziness_score": 8.5,
+      "laziness_score": 85,
+      "laziness_justification": "スコア理由",
       "serving_size": 1,
       "difficulty": "easy",
       "total_cost": コスト,
@@ -193,10 +223,12 @@ func formatBatchUserPrompt(req RecipeGenerationRequest, count int) string {
 
 	// Additional requirements
 	prompt.WriteString("## 要求事項\n")
-	prompt.WriteString("- 各レシピは調理法が異なること（炒める、煮る、レンジなど）\n")
+	prompt.WriteString("- 各レシピの手間度合計を8点以内に制限\n")
+	prompt.WriteString("- 複数の時間ティア（Lightning/Quick/Hands-off/Set-and-forget）を組み合わせる\n")
+	prompt.WriteString("- 各レシピは調理法が異なること（炒める、煮る、レンジ、オーブンなど）\n")
 	prompt.WriteString("- 同じ材料でもバリエーション豊富に\n")
-	prompt.WriteString("- すべてのレシピがずぼらスコア7.0以上\n")
-	prompt.WriteString("- JSON配列形式での出力を厳守\n")
+	prompt.WriteString("- すべてのレシピがずぼらスコア70点以上\n")
+	prompt.WriteString("- 新JSON配列形式での出力を厳守\n")
 
 	if len(req.Constraints) > 0 {
 		prompt.WriteString(fmt.Sprintf("\n制約: %s\n", strings.Join(req.Constraints, ", ")))
