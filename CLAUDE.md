@@ -38,6 +38,9 @@ cd scripts && go run init_db.go  # Create DB with sample data
 # Quick test
 curl localhost:8080/api/health   # Health check
 ```
+## MCP
+- use playwright MCP to debug and test UI
+- use o3 search MCP for technical research or ask your query from 3rd person perspective
 
 ## Critical Constraints
 - **NEVER commit to main branch** - Always use feature branches
@@ -95,10 +98,6 @@ FRONTEND_URL=http://localhost:3000
 - **Caching**: 24-hour in-memory cache for API cost reduction
 - **Rate Limiting**: 60 requests/minute to OpenAI
 
-## Performance Targets
-- Recipe generation: < 3 seconds
-- Database queries: < 100ms
-- Cache hit rate: > 30%
 
 ## Do Not Touch
 - `backend/data/*.db` - Database files

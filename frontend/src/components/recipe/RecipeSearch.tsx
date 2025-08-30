@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Input from '../common/Input';
-import Button from '../common/Button';
 
 export interface SearchFilters {
   query: string;
@@ -36,19 +35,34 @@ const RecipeSearch: React.FC<RecipeSearchProps> = ({ onSearch, loading = false }
 
   const [showAdvanced, setShowAdvanced] = useState(false);
   const initialLoadRef = useRef(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // リアルタイム検索 - フィルター変更時に自動実行（300msのデバウンス）
   useEffect(() => {
-    // 初回のみ検索（空の条件で全件取得）
     if (!initialLoadRef.current) {
+      // 初回のみすぐに検索
       initialLoadRef.current = true;
       onSearch(filters);
+      return;
     }
-  }, [onSearch, filters]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSearch(filters);
-  };
+    // 2回目以降はデバウンスして検索
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      onSearch(filters);
+    }, 300);
+
+    // クリーンアップ
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [filters, onSearch]);
+
+  // リアルタイム検索のためsubmitハンドラーは不要（useEffectで自動実行）
 
   const handleTagToggle = (tag: string) => {
     setFilters(prev => ({
@@ -82,24 +96,19 @@ const RecipeSearch: React.FC<RecipeSearchProps> = ({ onSearch, loading = false }
 
   return (
     <div className="card mb-6">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-4">
         {/* 基本検索 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            レシピを検索
+            レシピを検索 {loading && <span className="text-gray-500 text-xs">（検索中...）</span>}
           </label>
-          <div className="flex gap-2">
-            <Input
-              type="text"
-              placeholder="料理名やキーワードを入力..."
-              value={filters.query}
-              onChange={(e) => setFilters(prev => ({ ...prev, query: e.target.value }))}
-              className="flex-1"
-            />
-            <Button type="submit" disabled={loading}>
-              {loading ? '検索中...' : '🔍 検索'}
-            </Button>
-          </div>
+          <Input
+            type="text"
+            placeholder="料理名やキーワードを入力..."
+            value={filters.query}
+            onChange={(e) => setFilters(prev => ({ ...prev, query: e.target.value }))}
+            className="w-full"
+          />
         </div>
 
         {/* 詳細検索トグル */}
@@ -212,7 +221,7 @@ const RecipeSearch: React.FC<RecipeSearchProps> = ({ onSearch, loading = false }
             </div>
           </div>
         )}
-      </form>
+      </div>
     </div>
   );
 };

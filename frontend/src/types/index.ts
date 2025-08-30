@@ -74,12 +74,19 @@ export interface MealPlanPreferences {
 
 // Search Types
 export interface RecipeSearchParams {
-  tag?: string;
-  ingredient?: string;
+  query?: string;
+  tags?: string[];
+  ingredients?: string[];
   max_cooking_time?: number;
   min_laziness_score?: number;
+  season?: string;
   limit?: number;
   offset?: number;
+  page?: number;
+  
+  // Legacy fields for backward compatibility
+  tag?: string;
+  ingredient?: string;
 }
 
 export interface SearchRecipesResponse {
