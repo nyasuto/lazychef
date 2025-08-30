@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -714,5 +715,162 @@ func (h *AdminHandler) GenerateAutoRecipes(c *gin.Context) {
 		"generation_summary": result.GenerationSummary,
 		"strategy":           req.Strategy,
 		"note":               "Phase 2実装: 完全AI自動生成システム",
+	})
+}
+
+// BatchAutoGenerateRecipes handles POST /api/admin/auto-generation/batch
+// Phase 4: Batch generation with auto-generation integration
+func (h *AdminHandler) BatchAutoGenerateRecipes(c *gin.Context) {
+	var req struct {
+		TotalCount       int     `json:"total_count" binding:"required,min=1,max=100"`
+		BatchSize        int     `json:"batch_size" binding:"min=1,max=20"`
+		Strategy         string  `json:"strategy"`
+		QualityThreshold float64 `json:"quality_threshold"`
+		MaxRetries       int     `json:"max_retries"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Set defaults
+	if req.BatchSize <= 0 {
+		req.BatchSize = 5
+	}
+	if req.QualityThreshold <= 0 {
+		req.QualityThreshold = 70.0
+	}
+	if req.MaxRetries <= 0 {
+		req.MaxRetries = 3
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Minute)
+	defer cancel()
+
+	// Initialize tracking
+	batchResult := struct {
+		TotalGenerated  int                             `json:"total_generated"`
+		TotalSuccessful int                             `json:"total_successful"`
+		TotalFailed     int                             `json:"total_failed"`
+		AverageQuality  float64                         `json:"average_quality"`
+		Batches         []services.AutoGenerationResult `json:"batches"`
+		QualityPassed   int                             `json:"quality_passed"`
+		QualityFailed   int                             `json:"quality_failed"`
+		ElapsedTime     string                          `json:"elapsed_time"`
+		Errors          []string                        `json:"errors"`
+	}{
+		Batches: make([]services.AutoGenerationResult, 0),
+		Errors:  make([]string, 0),
+	}
+
+	startTime := time.Now()
+	totalQuality := 0.0
+	qualityCount := 0
+
+	// Process in batches
+	for generated := 0; generated < req.TotalCount; {
+		select {
+		case <-ctx.Done():
+			batchResult.Errors = append(batchResult.Errors, "Batch generation timeout")
+			goto finish
+		default:
+		}
+
+		// Calculate batch size for this iteration
+		remaining := req.TotalCount - generated
+		currentBatchSize := req.BatchSize
+		if remaining < currentBatchSize {
+			currentBatchSize = remaining
+		}
+
+		// Generate batch with retries
+		var batchGenResult *services.AutoGenerationResult
+		var lastErr error
+
+		for retry := 0; retry <= req.MaxRetries; retry++ {
+			autoReq := services.AutoGenerationRequest{
+				Count:    currentBatchSize,
+				Strategy: services.GenerationStrategy(req.Strategy),
+			}
+
+			batchGenResult, lastErr = h.autoGenerationService.GenerateAutoRecipes(ctx, autoReq)
+			if lastErr == nil {
+				break
+			}
+
+			if retry < req.MaxRetries {
+				time.Sleep(time.Duration(retry+1) * time.Second)
+			}
+		}
+
+		if lastErr != nil {
+			batchResult.Errors = append(batchResult.Errors,
+				fmt.Sprintf("Batch %d failed after %d retries: %v",
+					len(batchResult.Batches)+1, req.MaxRetries, lastErr))
+			batchResult.TotalFailed += currentBatchSize
+			generated += currentBatchSize
+			continue
+		}
+
+		// Process batch results
+		if batchGenResult != nil {
+			batchResult.TotalGenerated += len(batchGenResult.GeneratedRecipes)
+			batchResult.TotalSuccessful += len(batchGenResult.GeneratedRecipes)
+			batchResult.TotalFailed += batchGenResult.FailedGenerations
+
+			// Check quality threshold
+			if batchGenResult.QualityReport != nil {
+				for range batchGenResult.GeneratedRecipes {
+					if batchGenResult.AverageQuality >= req.QualityThreshold {
+						batchResult.QualityPassed++
+					} else {
+						batchResult.QualityFailed++
+					}
+				}
+				totalQuality += batchGenResult.AverageQuality
+				qualityCount++
+			}
+
+			batchResult.Batches = append(batchResult.Batches, *batchGenResult)
+			generated += len(batchGenResult.GeneratedRecipes)
+		}
+
+		// Progress tracking (optional delay between batches)
+		if generated < req.TotalCount {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	// Calculate final statistics
+	if qualityCount > 0 {
+		batchResult.AverageQuality = totalQuality / float64(qualityCount)
+	}
+
+finish:
+	batchResult.ElapsedTime = time.Since(startTime).String()
+
+	// Determine response status
+	statusCode := http.StatusOK
+	if batchResult.TotalSuccessful == 0 {
+		statusCode = http.StatusInternalServerError
+	} else if batchResult.TotalFailed > 0 {
+		statusCode = http.StatusPartialContent
+	}
+
+	c.JSON(statusCode, gin.H{
+		"success": batchResult.TotalSuccessful > 0,
+		"result":  batchResult,
+		"summary": gin.H{
+			"total_requested":   req.TotalCount,
+			"total_generated":   batchResult.TotalGenerated,
+			"success_rate":      fmt.Sprintf("%.1f%%", float64(batchResult.TotalSuccessful)/float64(req.TotalCount)*100),
+			"quality_pass_rate": fmt.Sprintf("%.1f%%", float64(batchResult.QualityPassed)/float64(batchResult.TotalGenerated)*100),
+			"average_quality":   fmt.Sprintf("%.1f", batchResult.AverageQuality),
+		},
+		"note": "Phase 4実装: バッチ自動生成システム",
 	})
 }
