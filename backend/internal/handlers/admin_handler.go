@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"fmt"
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -680,69 +680,39 @@ func (h *AdminHandler) GenerateAutoRecipes(c *gin.Context) {
 	if req.Strategy == "" {
 		req.Strategy = services.StrategyDiversityGapFill
 	}
+	if req.Count <= 0 {
+		req.Count = 5
+	}
 
-	// Get priority targets for generation
-	priorityTargets, err := h.autoGenerationService.GeneratePriorityTargets(req.Count)
+	// Phase 2: Use new GenerateAutoRecipes method
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
+	defer cancel()
+
+	result, err := h.autoGenerationService.GenerateAutoRecipes(ctx, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to generate priority targets",
+			"error":   "Failed to generate auto recipes",
 			"details": err.Error(),
 		})
 		return
 	}
 
-	// Generate recipes based on priority targets
-	var generatedRecipes []models.RecipeData
-	var generationErrors []string
-
-	for i, target := range priorityTargets {
-		if i >= req.Count {
-			break
-		}
-
-		// Convert dimension combination to generation parameters
-		genReq := h.autoGenerationService.GetGenerationParameters(target)
-
-		// Apply user constraints
-		if req.MaxCookingTime > 0 {
-			genReq.MaxCookingTime = req.MaxCookingTime
-		}
-
-		// TODO: Integrate with actual recipe generation service
-		// This would call h.generatorService.GenerateRecipe(ctx, genReq)
-		// For now, return the generation parameters as placeholder
-
-		// Placeholder recipe data
-		recipe := models.RecipeData{
-			Title:         fmt.Sprintf("自動生成レシピ %d", i+1),
-			Ingredients:   make([]models.Ingredient, 0),
-			Steps:         []string{"準備中", "実装予定"},
-			CookingTime:   genReq.MaxCookingTime,
-			ServingSize:   models.FlexibleInt(genReq.Servings),
-			Difficulty:    "easy",
-			Season:        genReq.Season,
-			LazinessScore: 8.0,
-			Tags:          []string{"自動生成", "多様性"},
-		}
-
-		// Convert ingredients
-		for _, ingredientName := range genReq.Ingredients {
-			recipe.Ingredients = append(recipe.Ingredients, models.Ingredient{
-				Name:   ingredientName,
-				Amount: "適量",
-			})
-		}
-
-		generatedRecipes = append(generatedRecipes, recipe)
+	// Extract recipe data for response
+	var recipeDataList []models.RecipeData
+	for _, recipe := range result.GeneratedRecipes {
+		recipeDataList = append(recipeDataList, recipe.Data)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":           true,
-		"generated_count":   len(generatedRecipes),
-		"requested_count":   req.Count,
-		"recipes":           generatedRecipes,
-		"priority_targets":  priorityTargets,
-		"generation_errors": generationErrors,
-		"note":              "Phase 1実装: 実際のレシピ生成は次フェーズで実装予定",
+		"success":            true,
+		"generated_count":    len(result.GeneratedRecipes),
+		"failed_generations": result.FailedGenerations,
+		"total_attempts":     result.TotalAttempts,
+		"requested_count":    req.Count,
+		"recipes":            recipeDataList,
+		"dimensions_covered": result.DimensionsCovered,
+		"generation_summary": result.GenerationSummary,
+		"strategy":           req.Strategy,
+		"note":               "Phase 2実装: 完全AI自動生成システム",
 	})
 }
