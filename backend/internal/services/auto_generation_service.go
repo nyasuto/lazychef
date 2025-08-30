@@ -429,6 +429,22 @@ func (s *AutoGenerationService) GenerateAutoRecipes(ctx context.Context, req Aut
 			UpdatedAt: time.Now(),
 		}
 
+		// Add meal_type to tags
+		if combo.MealType != nil {
+			mealTypeTag := combo.MealType.DimensionValue
+			// Check if meal_type tag is not already present
+			found := false
+			for _, tag := range recipe.Data.Tags {
+				if tag == mealTypeTag {
+					found = true
+					break
+				}
+			}
+			if !found {
+				recipe.Data.Tags = append(recipe.Data.Tags, mealTypeTag)
+			}
+		}
+
 		// Save recipe to database
 		if err := s.saveRecipeWithDimensions(recipe, combo); err != nil {
 			result.FailedGenerations++

@@ -83,19 +83,45 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onClick }) => {
       {/* タグ */}
       {recipe.tags && recipe.tags.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {recipe.tags.slice(0, 3).map((tag, index) => (
-            <span 
-              key={index}
-              className="inline-block bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs"
-            >
-              #{tag}
-            </span>
-          ))}
-          {recipe.tags.length > 3 && (
-            <span className="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">
-              +{recipe.tags.length - 3}
-            </span>
-          )}
+          {(() => {
+            // 基本タグ（全レシピ共通で不要）を除外
+            const excludeBasicTags = ['簡単', '時短', 'ずぼら'];
+            const mealTypeCategories = ['主食', '副菜', '汁物', 'デザート', '丼・ワンプレート', '常備菜・作り置き', 'おやつ・甘味'];
+            
+            // 有用なタグのみをフィルタリング
+            const usefulTags = recipe.tags.filter(tag => !excludeBasicTags.includes(tag));
+            const mealTypeTag = usefulTags.find(tag => mealTypeCategories.includes(tag));
+            const otherUsefulTags = usefulTags.filter(tag => !mealTypeCategories.includes(tag));
+            
+            // meal_typeタグを最初に、その後その他の有用なタグを表示
+            const displayTags = [];
+            if (mealTypeTag) {
+              displayTags.push(mealTypeTag);
+            }
+            displayTags.push(...otherUsefulTags.slice(0, 3)); // meal_typeタグ + 最大3つの追加タグ
+            
+            return (
+              <>
+                {displayTags.map((tag, index) => (
+                  <span 
+                    key={index}
+                    className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                      mealTypeCategories.includes(tag) 
+                        ? 'bg-purple-100 text-purple-800 border border-purple-200' 
+                        : 'bg-blue-100 text-blue-700'
+                    }`}
+                  >
+                    #{tag}
+                  </span>
+                ))}
+                {usefulTags.length > displayTags.length && (
+                  <span className="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">
+                    +{usefulTags.length - displayTags.length}
+                  </span>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
     </div>

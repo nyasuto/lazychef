@@ -157,7 +157,7 @@ func GetRecipeJSONSchema() RecipeSchema {
 				Description: "Recipe tags",
 				Items: &SchemaProperty{
 					Type: "string",
-					Enum: []string{"簡単", "10分以内", "15分以内", "ずぼら", "一品", "和食", "洋食", "中華", "その他"},
+					Enum: []string{"簡単", "10分以内", "15分以内", "ずぼら", "一品", "和食", "洋食", "中華", "主食", "副菜", "汁物", "デザート", "丼・ワンプレート", "常備菜・作り置き", "おやつ・甘味", "その他"},
 				},
 			},
 			"season": {
