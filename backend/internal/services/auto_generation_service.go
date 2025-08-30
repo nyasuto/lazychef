@@ -1,8 +1,11 @@
 package services
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
+	"time"
 
 	"lazychef/internal/database"
 	"lazychef/internal/models"
@@ -12,6 +15,7 @@ import (
 type AutoGenerationService struct {
 	db               *database.Database
 	diversityService *DiversityService
+	generatorService *RecipeGeneratorService
 }
 
 // DimensionCombination represents a specific combination of dimensions
@@ -61,10 +65,11 @@ type AutoGenerationRequest struct {
 }
 
 // NewAutoGenerationService creates a new auto generation service
-func NewAutoGenerationService(db *database.Database, diversityService *DiversityService) *AutoGenerationService {
+func NewAutoGenerationService(db *database.Database, diversityService *DiversityService, generatorService *RecipeGeneratorService) *AutoGenerationService {
 	return &AutoGenerationService{
 		db:               db,
 		diversityService: diversityService,
+		generatorService: generatorService,
 	}
 }
 
@@ -337,4 +342,195 @@ func (s *AutoGenerationService) GetGenerationParameters(combo DimensionCombinati
 // GeneratePriorityTargets is a public wrapper for generatePriorityTargets
 func (s *AutoGenerationService) GeneratePriorityTargets(count int) ([]DimensionCombination, error) {
 	return s.generatePriorityTargets(count)
+}
+
+// AutoGenerationResult represents the result of auto-generation
+type AutoGenerationResult struct {
+	GeneratedRecipes  []models.Recipe        `json:"generated_recipes"`
+	FailedGenerations int                    `json:"failed_generations"`
+	TotalAttempts     int                    `json:"total_attempts"`
+	DimensionsCovered []DimensionCombination `json:"dimensions_covered"`
+	GenerationSummary map[string]int         `json:"generation_summary"`
+}
+
+// GenerateAutoRecipes generates recipes automatically based on coverage gaps
+func (s *AutoGenerationService) GenerateAutoRecipes(ctx context.Context, req AutoGenerationRequest) (*AutoGenerationResult, error) {
+	// Phase 2: Complete AI auto-generation implementation
+	if req.Strategy == "" {
+		req.Strategy = StrategyDiversityGapFill
+	}
+	if req.Count <= 0 {
+		req.Count = 5
+	}
+
+	// Analyze current coverage to determine priority targets
+	coverage, err := s.AnalyzeCoverage()
+	if err != nil {
+		return nil, fmt.Errorf("failed to analyze coverage: %w", err)
+	}
+
+	// Generate priority targets based on strategy
+	var targetCombinations []DimensionCombination
+	switch req.Strategy {
+	case StrategyDiversityGapFill:
+		targetCombinations = coverage.PriorityTargets[:min(req.Count, len(coverage.PriorityTargets))]
+	case StrategyRandom:
+		targetCombinations, err = s.generateRandomCombinations(req.Count)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate random combinations: %w", err)
+		}
+	case StrategyWeighted:
+		targetCombinations, err = s.generateWeightedCombinations(req.Count)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate weighted combinations: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("unknown generation strategy: %s", req.Strategy)
+	}
+
+	result := &AutoGenerationResult{
+		GeneratedRecipes:  make([]models.Recipe, 0, req.Count),
+		DimensionsCovered: targetCombinations,
+		GenerationSummary: make(map[string]int),
+	}
+
+	// Generate recipes for each target combination
+	for i, combo := range targetCombinations {
+		select {
+		case <-ctx.Done():
+			return result, ctx.Err()
+		default:
+		}
+
+		// Convert dimension combination to generation parameters
+		genParams := s.GetGenerationParameters(combo)
+
+		// Generate recipe using existing generator service
+		genResult, err := s.generatorService.GenerateRecipe(ctx, genParams)
+		result.TotalAttempts++
+
+		if err != nil {
+			result.FailedGenerations++
+			continue
+		}
+
+		// Create recipe with dimension mappings
+		recipe := &models.Recipe{
+			Data:      *genResult.Recipe,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+
+		// Save recipe to database
+		if err := s.saveRecipeWithDimensions(recipe, combo); err != nil {
+			result.FailedGenerations++
+			continue
+		}
+
+		result.GeneratedRecipes = append(result.GeneratedRecipes, *recipe)
+
+		// Update generation summary
+		mealType := "unknown"
+		if combo.MealType != nil {
+			mealType = combo.MealType.DimensionValue
+		}
+		result.GenerationSummary[mealType]++
+
+		// Optional: Add small delay between generations to be respectful to API
+		if i < len(targetCombinations)-1 {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	return result, nil
+}
+
+// saveRecipeWithDimensions saves recipe and creates dimension mappings
+func (s *AutoGenerationService) saveRecipeWithDimensions(recipe *models.Recipe, combo DimensionCombination) error {
+	// Start transaction for atomic operation
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			// In production, this error should be logged properly
+			_ = err // Acknowledge the error to avoid staticcheck SA9003
+		}
+	}()
+
+	// Save recipe
+	recipeJSON, err := json.Marshal(recipe.Data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal recipe data: %w", err)
+	}
+
+	query := `INSERT INTO recipes (data, created_at, updated_at) VALUES (?, ?, ?) RETURNING id`
+	err = tx.QueryRow(query, string(recipeJSON), recipe.CreatedAt, recipe.UpdatedAt).Scan(&recipe.ID)
+	if err != nil {
+		return fmt.Errorf("failed to save recipe: %w", err)
+	}
+
+	// Create dimension mappings
+	dimensions := []struct {
+		dimension  *models.RecipeDimension
+		confidence float64
+	}{
+		{combo.MealType, 1.0},
+		{combo.Protein, 0.9},
+		{combo.CookingMethod, 0.9},
+		{combo.Seasoning, 0.8},
+		{combo.LazynessLevel, 0.9},
+	}
+
+	mappingQuery := `INSERT INTO recipe_dimension_mappings (recipe_id, dimension_id, confidence_score, created_at) VALUES (?, ?, ?, ?)`
+	for _, dim := range dimensions {
+		if dim.dimension != nil {
+			_, err = tx.Exec(mappingQuery, recipe.ID, dim.dimension.ID, dim.confidence, time.Now())
+			if err != nil {
+				return fmt.Errorf("failed to create dimension mapping for dimension %d: %w", dim.dimension.ID, err)
+			}
+		}
+	}
+
+	return tx.Commit()
+}
+
+// generateRandomCombinations creates random dimension combinations
+func (s *AutoGenerationService) generateRandomCombinations(count int) ([]DimensionCombination, error) {
+	// Get all dimensions by type
+	dimensionsByType, err := s.getDimensionsByType()
+	if err != nil {
+		return nil, err
+	}
+
+	mealTypes := dimensionsByType["meal_type"]
+	proteins := dimensionsByType["protein"]
+	cookingMethods := dimensionsByType["cooking_method"]
+	seasonings := dimensionsByType["seasoning"]
+	lazynessLevels := dimensionsByType["laziness_level"]
+
+	if len(mealTypes) == 0 || len(proteins) == 0 || len(cookingMethods) == 0 ||
+		len(seasonings) == 0 || len(lazynessLevels) == 0 {
+		return nil, fmt.Errorf("insufficient dimensions available for generation")
+	}
+
+	combinations := make([]DimensionCombination, count)
+	for i := 0; i < count; i++ {
+		combinations[i] = DimensionCombination{
+			MealType:      &mealTypes[rand.Intn(len(mealTypes))],
+			Protein:       &proteins[rand.Intn(len(proteins))],
+			CookingMethod: &cookingMethods[rand.Intn(len(cookingMethods))],
+			Seasoning:     &seasonings[rand.Intn(len(seasonings))],
+			LazynessLevel: &lazynessLevels[rand.Intn(len(lazynessLevels))],
+		}
+	}
+
+	return combinations, nil
+}
+
+// generateWeightedCombinations creates weighted dimension combinations based on existing patterns
+func (s *AutoGenerationService) generateWeightedCombinations(count int) ([]DimensionCombination, error) {
+	// For now, use random combinations - could be enhanced with ML-based weighting
+	return s.generateRandomCombinations(count)
 }

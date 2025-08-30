@@ -106,7 +106,7 @@ func main() {
 			diversityService := services.NewDiversityService(db, generatorService)
 
 			// Auto generation service (Issue #76 - Phase 1)
-			autoGenerationService := services.NewAutoGenerationService(db, diversityService)
+			autoGenerationService := services.NewAutoGenerationService(db, diversityService, generatorService)
 
 			// Admin handler for new APIs
 			adminHandler = handlers.NewAdminHandler(
